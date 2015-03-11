@@ -1,12 +1,15 @@
+import sun.security.mscapi.RSACipher;
 import utils.JoinMessage;
 import utils.Message;
+import utils.ServerInitMessage;
 
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.SecretKey;
+import javax.crypto.*;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.util.BitSet;
 import java.util.HashMap;
 
@@ -52,6 +55,7 @@ public class GroupMaster implements Runnable{
 
 
     private void handleJoin(JoinMessage message) {
+
         int availableId = -1;
         if (namingMap.size() < MAX_MEMBERS_ALLOWED) {
             //FIND AVAILABLE ID FOR THE MEMBER REQUESTING ACCESS
@@ -65,6 +69,10 @@ public class GroupMaster implements Runnable{
             if (availableId != -1) {
                 namingSlotStatus[availableId] = true;
                 namingMap.put(availableId,message.getSource());
+                tableManager.recomputeDek();
+                tableManager.recomputeKeks(availableId);
+
+                sendKeysJoin(message.getPublicKey(),availableId);
             }
 
         }
@@ -74,11 +82,68 @@ public class GroupMaster implements Runnable{
 
     }
 
+    //------------------------------------------------------------------
+    //SEND THE NEW DEK AND KEKs TO THE NEW ENTRY ENCRYPTED WITH PK
+    //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE OLD DEK (?)(?)
+    //------------------------------------------------------------------
+    private void sendKeysJoin(PublicKey publicKey,int newEntryId){
+        byte[] encryptedKeys;
+        SecretKey[][] kekTable = tableManager.getKekTable();
+
+        ServerInitMessage serverInitMessage = new ServerInitMessage();
+
+        String binaryId = Integer.toBinaryString(newEntryId);
+
+        //ENCRYPT DEK AND KEKs TO BE SENT TO THE NEW ENTRY WITH HIS PK
+        try {
+            rsaCipher.init(Cipher.ENCRYPT_MODE,publicKey);
+        } catch (InvalidKeyException e) {
+            System.out.println("Can't initialize public key cipher");
+            e.printStackTrace();
+        }
+
+        try {
+            encryptedKeys = rsaCipher.doFinal(tableManager.getDek().getEncoded());
+            serverInitMessage.setDek(encryptedKeys);
+
+            int index = Character.getNumericValue(binaryId.charAt(0));
+            encryptedKeys = rsaCipher.doFinal(kekTable[index][0].getEncoded());
+            serverInitMessage.setKek1(encryptedKeys);
+
+            index = Character.getNumericValue(binaryId.charAt(1));
+            encryptedKeys = rsaCipher.doFinal(kekTable[index][1].getEncoded());
+            serverInitMessage.setKek2(encryptedKeys);
+
+            index = Character.getNumericValue(binaryId.charAt(2));
+            encryptedKeys = rsaCipher.doFinal(kekTable[index][2].getEncoded());
+            serverInitMessage.setKek3(encryptedKeys);
+
+        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            System.out.println("Error in building the keys package");
+            e.printStackTrace();
+        }
+
+        //SEND THE MESSAGE TO THE NEW ENTRY
+        try {
+
+            Socket socket = namingMap.get(newEntryId);
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+            objectOutputStream.writeObject(serverInitMessage);
+            socket.close();
+
+        } catch (IOException e) {
+            System.out.println("Error in new dek message send to the new entry");
+            e.printStackTrace();
+        }
+
+    }
+
 
 }
 
 class TableManager{
     private SecretKey dek;
+    private SecretKey oldDek;
     private SecretKey[][] kekTable;
     private KeyGenerator keygen;
 
@@ -90,7 +155,14 @@ class TableManager{
             e.printStackTrace();
         }
 
-        dek = recomputeDek();
+        try {
+            keygen = KeyGenerator.getInstance("DES");
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+
+        dek = keygen.generateKey();
+        oldDek = null;
 
         for(int i = 0;i < 2;i++) {
             for(int j = 0; j < 3; j++) {
@@ -100,13 +172,14 @@ class TableManager{
 
     }
 
-    public SecretKey recomputeDek(){
+    public void recomputeDek(){
         try {
             keygen = KeyGenerator.getInstance("DES");
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         }
-        return keygen.generateKey();
+        oldDek = dek;
+        dek = keygen.generateKey();
 
     }
 
@@ -121,5 +194,13 @@ class TableManager{
 
     public SecretKey[][] getKekTable() {
         return kekTable;
+    }
+
+    public SecretKey getDek() {
+        return dek;
+    }
+
+    public SecretKey getOldDek() {
+        return oldDek;
     }
 }

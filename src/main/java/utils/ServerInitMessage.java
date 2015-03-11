@@ -18,6 +18,9 @@ public class ServerInitMessage implements Message,Serializable {
         this.kek3 = kek3;
     }
 
+    public ServerInitMessage() {
+    }
+
     public byte[] getDek() {
         return dek;
     }
@@ -32,5 +35,21 @@ public class ServerInitMessage implements Message,Serializable {
 
     public byte[] getKek3() {
         return kek3;
+    }
+
+    public void setDek(byte[] dek) {
+        this.dek = dek;
+    }
+
+    public void setKek1(byte[] kek1) {
+        this.kek1 = kek1;
+    }
+
+    public void setKek2(byte[] kek2) {
+        this.kek2 = kek2;
+    }
+
+    public void setKek3(byte[] kek3) {
+        this.kek3 = kek3;
     }
 }
