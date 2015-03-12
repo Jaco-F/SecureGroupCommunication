@@ -9,7 +9,7 @@ public class LeaveMessage implements Message,Serializable{
     private int port;
     private String address;
 
-    public LeaveMessage(int port, String address) {
+    public LeaveMessage(String address,int port) {
         this.port = port;
         this.address = address;
     }

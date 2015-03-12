@@ -105,13 +105,13 @@ public class GroupMaster implements Runnable{
                 e.printStackTrace();
             }
 
-            if (messageIn.getClass().getName().equals("utils.JoinMessage")) {
+            if (messageIn instanceof JoinMessage) {
                 System.out.println("Join Message received");
                 handleJoin((JoinMessage) messageIn);
-            } else if (messageIn.getClass().getName().equals("utils.LeaveMessage")) {
+            } else if (messageIn instanceof LeaveMessage) {
                 System.out.println("Leave Message received");
                 handleLeave((LeaveMessage) messageIn);
-            } else if (messageIn.getClass().getName().equals("utils.TextMessage")) {
+            } else if (messageIn instanceof TextMessage) {
                 System.out.println("Text Message received");
                 broadcastText((TextMessage) messageIn);
             }
@@ -264,7 +264,7 @@ public class GroupMaster implements Runnable{
     //SEND THE NEW DEK AND KEKs TO THE OTHER MEMBERS
     //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE KEK THAT THE LEAVE MEMBER NOT KNOW
     //------------------------------------------------------------------
-    public void sendKeysLeave(int leaveId){
+    private void sendKeysLeave(int leaveId){
         SecretKey[][] kekTable = tableManager.getKekTable();
 
         SecretKey dek = tableManager.getDek();
@@ -337,7 +337,7 @@ public class GroupMaster implements Runnable{
 
     }
 
-    public void broadcastLeaveDek(ServerLeaveDek serverLeaveDek){
+    private void broadcastLeaveDek(ServerLeaveDek serverLeaveDek){
         for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
             if (namingSlotStatus[i]) {
                 try {

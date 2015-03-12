@@ -1,7 +1,4 @@
-import utils.JoinMessage;
-import utils.Message;
-import utils.ServerJoinKeys;
-import utils.TextMessage;
+import utils.*;
 
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
@@ -230,7 +227,7 @@ public class GroupMember implements Runnable{
 
     }
 
-    public void sendMsg(String msg){
+    void sendMsg(String msg){
         ObjectOutputStream objectOutputStream = null;
         TextMessage txMessage = new TextMessage();
         txMessage.setAddress(address);
@@ -257,6 +254,32 @@ public class GroupMember implements Runnable{
 
         try {
             objectOutputStream.writeObject(txMessage);
+            objectOutputStream.close();
+            serverSocket.close();
+        } catch (IOException e) {
+            System.out.println("Cannot write object to group master");
+            e.printStackTrace();
+        }
+    }
+
+    protected void sendLeaveMsg() {
+        Message message = new LeaveMessage(this.address, this.port);
+        ObjectOutputStream objectOutputStream = null;
+
+        //------------------------------------------------------
+        //CONNECT TO THE SERVER AND SEND HIM THE LEAVE MESSAGE
+        //------------------------------------------------------
+        try {
+            serverSocket = new Socket("localhost",12000);
+            objectOutputStream = new ObjectOutputStream(serverSocket.getOutputStream());
+        } catch (IOException e) {
+            System.out.println("Cannot create objectOutputStream");
+            e.printStackTrace();
+        }
+
+        try {
+            objectOutputStream.writeObject(message);
+            System.out.println("You left the group");
         } catch (IOException e) {
             System.out.println("Cannot write object to group master");
             e.printStackTrace();
@@ -274,7 +297,7 @@ class WriteChat implements Runnable{
 
     @Override
     public void run() {
-        //liSTEN FOR KEYBOARD INPUT
+        //LISTEN FOR KEYBOARD INPUT
         String line="";
         while(true){
 
@@ -286,7 +309,7 @@ class WriteChat implements Runnable{
                 e.printStackTrace();
             }
             if(line.equals("exit")){
-                //Todo:chiamare leave
+                groupMember.sendLeaveMsg();
             }
             else{
                 groupMember.sendMsg(line);
