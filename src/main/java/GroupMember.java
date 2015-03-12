@@ -60,6 +60,10 @@ public class GroupMember implements Runnable{
     @Override
     public void run() {
 
+        while (true){
+
+        }
+
     }
 
     private void join(){
@@ -113,7 +117,7 @@ public class GroupMember implements Runnable{
         //DECRYPTS AND SAVE DEK
         try {
             byte[] decDek = rsaCipher.doFinal(initMessage.getDek());
-            dek = new SecretKeySpec(decDek,0,decDek.length,"DES");
+            dek = new SecretKeySpec(decDek,0,decDek.length,"RSA");
         } catch (IllegalBlockSizeException | BadPaddingException e) {
             System.out.println("Error in dek decryption");
             e.printStackTrace();
@@ -124,9 +128,9 @@ public class GroupMember implements Runnable{
             byte[] decKek1 = rsaCipher.doFinal(initMessage.getKek1());
             byte[] decKek2 = rsaCipher.doFinal(initMessage.getKek2());
             byte[] decKek3 = rsaCipher.doFinal(initMessage.getKek3());
-            kek[0] = new SecretKeySpec(decKek1,0,decKek1.length,"DES");
-            kek[1] = new SecretKeySpec(decKek2,0,decKek2.length,"DES");
-            kek[2] = new SecretKeySpec(decKek3,0,decKek3.length,"DES");
+            kek[0] = new SecretKeySpec(decKek1,0,decKek1.length,"RSA");
+            kek[1] = new SecretKeySpec(decKek2,0,decKek2.length,"RSA");
+            kek[2] = new SecretKeySpec(decKek3,0,decKek3.length,"RSA");
         } catch (IllegalBlockSizeException|BadPaddingException e){
             System.out.println("Error in kek decryption");
             e.printStackTrace();
