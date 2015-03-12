@@ -1,9 +1,11 @@
 package utils;
 
+import java.io.Serializable;
+
 /**
  * Created by andre on 12/03/15.
  */
-public class ServerLeaveKek {
+public class ServerLeaveKek implements Message,Serializable{
     byte[] kek1;
     byte[] kek2;
     byte[] kek3;

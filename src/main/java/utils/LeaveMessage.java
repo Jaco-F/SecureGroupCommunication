@@ -7,13 +7,19 @@ import java.net.Socket;
  * Created by andre on 12/03/15.
  */
 public class LeaveMessage implements Message,Serializable{
-    private Socket source;
+    private int port;
+    private String address;
 
-    public LeaveMessage(Socket source) {
-        this.source = source;
+    public LeaveMessage(int port, String address) {
+        this.port = port;
+        this.address = address;
     }
 
-    public Socket getSource() {
-        return source;
+    public int getPort() {
+        return port;
+    }
+
+    public String getAddress() {
+        return address;
     }
 }

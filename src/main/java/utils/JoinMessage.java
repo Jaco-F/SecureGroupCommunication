@@ -10,18 +10,24 @@ import java.security.PublicKey;
 public class JoinMessage implements Message,Serializable {
 
     private PublicKey publicKey;
-    private Socket source;
+    private String sourceIP;
+    private int sourcePort;
 
-    public JoinMessage(PublicKey publicKey, Socket source) {
+    public JoinMessage(PublicKey publicKey, String sourceIP, int sourcePort) {
         this.publicKey = publicKey;
-        this.source = source;
+        this.sourceIP = sourceIP;
+        this.sourcePort = sourcePort;
     }
 
     public PublicKey getPublicKey() {
         return publicKey;
     }
 
-    public Socket getSource() {
-        return source;
+    public String getSourceIP() {
+        return sourceIP;
+    }
+
+    public int getSourcePort() {
+        return sourcePort;
     }
 }
