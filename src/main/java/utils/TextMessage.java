@@ -6,9 +6,9 @@ import java.io.Serializable;
  * Created by andre on 12/03/15.
  */
 public class TextMessage implements Message,Serializable{
-    byte[] text;
-    String address;
-    int port;
+    private byte[] text;
+    private String address;
+    private int port;
 
     public TextMessage() {
     }

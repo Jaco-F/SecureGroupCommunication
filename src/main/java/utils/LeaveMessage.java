@@ -1,7 +1,6 @@
 package utils;
 
 import java.io.Serializable;
-import java.net.Socket;
 
 /**
  * Created by andre on 12/03/15.

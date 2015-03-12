@@ -6,9 +6,9 @@ import java.io.Serializable;
  * Created by andre on 12/03/15.
  */
 public class ServerLeaveKek implements Message,Serializable{
-    byte[] kek1;
-    byte[] kek2;
-    byte[] kek3;
+    private byte[] kek1;
+    private byte[] kek2;
+    private byte[] kek3;
 
     public ServerLeaveKek() {
     }

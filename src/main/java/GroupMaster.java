@@ -16,8 +16,8 @@ import java.util.HashMap;
  * Created by Jacopo on 11/03/2015.
  */
 class MappingSocket{
-    int port;
-    String address;
+    private final int port;
+    private final String address;
 
     public MappingSocket(int port, String address) {
         this.port = port;
@@ -43,7 +43,7 @@ public class GroupMaster implements Runnable{
     private Cipher desCipher;
     private Cipher rsaCipher;
 
-    private int serverPort = 12000;
+    private static final int serverPort = 12000;
     private ServerSocket serverSocket;
 
     public GroupMaster() {
@@ -385,9 +385,16 @@ public class GroupMaster implements Runnable{
         }
     }
     private void broadcastText(TextMessage messageIn) {
-        //TODO:non rimandare al mittente
+        int sender = -1;
+        for (int i = 0; i < namingMap.size(); i++){
+            MappingSocket ms = namingMap.get(i);
+            if (ms.getAddress().equals(messageIn.getAddress()) && ms.getPort() == messageIn.getPort()) {
+                sender = i;
+            }
+        }
+
         for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
-            if (namingSlotStatus[i]) {
+            if (namingSlotStatus[i] && (i!=sender)) {
                 try {
                     Socket socket = new Socket(namingMap.get(i).getAddress(),namingMap.get(i).getPort());
                     ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());

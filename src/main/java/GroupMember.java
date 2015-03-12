@@ -81,7 +81,7 @@ public class GroupMember implements Runnable{
         Socket senderSocket;
 
         Message inputMsg;
-        ObjectInputStream objectInputStream = null;
+        ObjectInputStream objectInputStream;
 
         while (true){
             try {
@@ -151,8 +151,7 @@ public class GroupMember implements Runnable{
     }
 
     private void join(){
-        Message message = null;
-        message = new JoinMessage(publicKey,this.address, this.port);
+        Message message = new JoinMessage(publicKey,this.address, this.port);
         ObjectOutputStream objectOutputStream = null;
         ObjectInputStream objectInputStream = null;
 
@@ -275,7 +274,7 @@ class WriteChat implements Runnable{
 
     @Override
     public void run() {
-        //ascolto tastiera
+        //liSTEN FOR KEYBOARD INPUT
         String line="";
         while(true){
 

@@ -6,7 +6,7 @@ import java.io.Serializable;
  * Created by andre on 12/03/15.
  */
 public class ServerLeaveDek implements Message,Serializable {
-    byte[] dek;
+    private byte[] dek;
 
     public ServerLeaveDek(byte[] dek) {
         this.dek = dek;
