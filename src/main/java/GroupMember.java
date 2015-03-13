@@ -15,7 +15,7 @@ public class GroupMember implements Runnable{
     private PublicKey publicKey;
 
     private SecretKey dek;
-    private SecretKey[] kek;
+    private SecretKey[] keks;
 
     private ServerSocket listeningSocket;
 
@@ -30,7 +30,7 @@ public class GroupMember implements Runnable{
     public GroupMember(String ip, int port) {
         this.port = port;
         this.address = ip;
-        kek = new SecretKey[3];
+        keks = new SecretKey[3];
         try {
             listeningSocket = new ServerSocket(port);
         } catch (IOException e) {
@@ -86,7 +86,7 @@ public class GroupMember implements Runnable{
                 objectInputStream = new ObjectInputStream(senderSocket.getInputStream());
                 inputMsg = (Message)objectInputStream.readObject();
 
-                if(inputMsg.getClass().getName().equals("utils.ServerJoinKeys")){
+                if(inputMsg instanceof ServerJoinKeys){
                     System.out.println("Another client is in the group");
                     ServerJoinKeys serverJoinKeys = (ServerJoinKeys) inputMsg;
 
@@ -103,32 +103,32 @@ public class GroupMember implements Runnable{
                     //DECRYPT KEK1
                     byte[] decKek;
                     try {
-                        desCipher.init(Cipher.DECRYPT_MODE,kek[0]);
+                        desCipher.init(Cipher.DECRYPT_MODE,keks[0]);
                         decKek = desCipher.doFinal(serverJoinKeys.getKek1());
-                        kek[0] = new SecretKeySpec(decKek,0,decKek.length,"DES");
+                        keks[0] = new SecretKeySpec(decKek,0,decKek.length,"DES");
                     } catch (BadPaddingException e) {
                         System.out.println("I don't need the kek 1");
                     }
 
                     //DECRYPT KEK2
                     try {
-                        desCipher.init(Cipher.DECRYPT_MODE,kek[1]);
+                        desCipher.init(Cipher.DECRYPT_MODE,keks[1]);
                         decKek = desCipher.doFinal(serverJoinKeys.getKek2());
-                        kek[1] = new SecretKeySpec(decKek,0,decKek.length,"DES");
+                        keks[1] = new SecretKeySpec(decKek,0,decKek.length,"DES");
                     } catch (BadPaddingException e) {
                         System.out.println("I don't need the kek 2");
                     }
 
                     //DECRYPT KEK3
                     try {
-                        desCipher.init(Cipher.DECRYPT_MODE,kek[2]);
+                        desCipher.init(Cipher.DECRYPT_MODE,keks[2]);
                         decKek = desCipher.doFinal(serverJoinKeys.getKek3());
-                        kek[2] = new SecretKeySpec(decKek,0,decKek.length,"DES");
+                        keks[2] = new SecretKeySpec(decKek,0,decKek.length,"DES");
                     } catch (BadPaddingException e) {
                         System.out.println("I don't need the kek 3");
                     }
 
-                }else if (inputMsg.getClass().getName().equals("utils.TextMessage")){
+                }else if (inputMsg instanceof TextMessage){
                     TextMessage txMessage = (TextMessage) inputMsg;
                     desCipher.init(Cipher.DECRYPT_MODE,dek);
                     try {
@@ -136,7 +136,53 @@ public class GroupMember implements Runnable{
                         String msg = new String(decMsg);
                         System.out.println(txMessage.getAddress() + " - " + txMessage.getPort() + " : " + msg);
                     } catch (BadPaddingException e) {
-                        e.printStackTrace();
+                        System.out.println("Received a message I couldn't decrypt");
+                    }
+                }else if (inputMsg instanceof ServerLeaveDek) {
+                    ServerLeaveDek serverLeaveDek = (ServerLeaveDek) inputMsg;
+                    byte[] decDek;
+
+                    //I NEED TO TRY WITH ALL MY KEKS IF I CAN DECRYPT THE MESSAGE
+                    //THIS WAY I CAN OBTAIN THE NEW DEK
+                    for (SecretKey kek : keks) {
+                        try {
+                            desCipher.init(Cipher.DECRYPT_MODE,kek);
+                            decDek = desCipher.doFinal(serverLeaveDek.getDek());
+                            dek = new SecretKeySpec(decDek,0,decDek.length,"DES");
+                        } catch (BadPaddingException e) {
+                            //System.out.println("");
+                        }
+                    }
+                } else if (inputMsg instanceof ServerLeaveKek) {
+                    ServerLeaveKek serverLeaveKek = (ServerLeaveKek) inputMsg;
+                    byte[] firstPhaseDecriptedKek;
+                    byte[] decKek;
+                    try {
+                        desCipher.init(Cipher.DECRYPT_MODE,dek);
+                        firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek1());
+                        desCipher.init(Cipher.DECRYPT_MODE,keks[0]);
+                        decKek = desCipher.doFinal(firstPhaseDecriptedKek);
+                        keks[0] = new SecretKeySpec(decKek,0,decKek.length,"DES");
+                    } catch (BadPaddingException e) {
+                        System.out.println("I don't need the kek 1");
+                    }
+                    try {
+                        desCipher.init(Cipher.DECRYPT_MODE,dek);
+                        firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek2());
+                        desCipher.init(Cipher.DECRYPT_MODE,keks[1]);
+                        decKek = desCipher.doFinal(firstPhaseDecriptedKek);
+                        keks[1] = new SecretKeySpec(decKek,0,decKek.length,"DES");
+                    } catch (BadPaddingException e) {
+                        System.out.println("I don't need the kek 2");
+                    }
+                    try {
+                        desCipher.init(Cipher.DECRYPT_MODE,dek);
+                        firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek3());
+                        desCipher.init(Cipher.DECRYPT_MODE,keks[2]);
+                        decKek = desCipher.doFinal(firstPhaseDecriptedKek);
+                        keks[2] = new SecretKeySpec(decKek,0,decKek.length,"DES");
+                    } catch (BadPaddingException e) {
+                        System.out.println("I don't need the kek 3");
                     }
                 }
 
@@ -208,9 +254,9 @@ public class GroupMember implements Runnable{
             byte[] decKek1 = rsaCipher.doFinal(initMessage.getKek1());
             byte[] decKek2 = rsaCipher.doFinal(initMessage.getKek2());
             byte[] decKek3 = rsaCipher.doFinal(initMessage.getKek3());
-            kek[0] = new SecretKeySpec(decKek1,0,decKek1.length,"DES");
-            kek[1] = new SecretKeySpec(decKek2,0,decKek2.length,"DES");
-            kek[2] = new SecretKeySpec(decKek3,0,decKek3.length,"DES");
+            keks[0] = new SecretKeySpec(decKek1,0,decKek1.length,"DES");
+            keks[1] = new SecretKeySpec(decKek2,0,decKek2.length,"DES");
+            keks[2] = new SecretKeySpec(decKek3,0,decKek3.length,"DES");
         } catch (IllegalBlockSizeException|BadPaddingException e){
             System.out.println("Error in kek decryption");
             e.printStackTrace();
@@ -279,6 +325,8 @@ public class GroupMember implements Runnable{
 
         try {
             objectOutputStream.writeObject(message);
+            objectOutputStream.close();
+            serverSocket.close();
             System.out.println("You left the group");
         } catch (IOException e) {
             System.out.println("Cannot write object to group master");
