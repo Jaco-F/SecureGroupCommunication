@@ -11,13 +11,6 @@ public class ServerJoinKeys implements Message,Serializable {
     private byte[] kek2;
     private byte[] kek3;
 
-    public ServerJoinKeys(byte[] dek, byte[] kek1, byte[] kek2, byte[] kek3) {
-        this.dek = dek;
-        this.kek1 = kek1;
-        this.kek2 = kek2;
-        this.kek3 = kek3;
-    }
-
     public ServerJoinKeys() {
     }
 

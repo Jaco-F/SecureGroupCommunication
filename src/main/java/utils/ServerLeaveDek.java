@@ -8,10 +8,6 @@ import java.io.Serializable;
 public class ServerLeaveDek implements Message,Serializable {
     private byte[] dek;
 
-    public ServerLeaveDek(byte[] dek) {
-        this.dek = dek;
-    }
-
     public ServerLeaveDek() {
     }
 

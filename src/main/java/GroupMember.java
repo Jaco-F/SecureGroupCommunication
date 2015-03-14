@@ -273,7 +273,7 @@ public class GroupMember implements Runnable{
 
     }
 
-    void sendMsg(String msg){
+    private void sendMsg(String msg){
         ObjectOutputStream objectOutputStream = null;
         TextMessage txMessage = new TextMessage();
         txMessage.setAddress(address);
@@ -308,7 +308,7 @@ public class GroupMember implements Runnable{
         }
     }
 
-    protected void sendLeaveMsg() {
+    private void sendLeaveMsg() {
         Message message = new LeaveMessage(this.address, this.port);
         ObjectOutputStream objectOutputStream = null;
 
@@ -333,34 +333,35 @@ public class GroupMember implements Runnable{
             e.printStackTrace();
         }
     }
-}
 
-class WriteChat implements Runnable{
 
-    private GroupMember groupMember;
+    class WriteChat implements Runnable{
 
-    public WriteChat(GroupMember groupMember){
-        this.groupMember = groupMember;
-    }
+        private GroupMember groupMember;
 
-    @Override
-    public void run() {
-        //LISTEN FOR KEYBOARD INPUT
-        String line="";
-        while(true){
+        public WriteChat(GroupMember groupMember){
+            this.groupMember = groupMember;
+        }
 
-            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-            System.out.println("Type the message to broadcast (exit to leave)...");
-            try {
-                line = br.readLine();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            if(line.equals("exit")){
-                groupMember.sendLeaveMsg();
-            }
-            else{
-                groupMember.sendMsg(line);
+        @Override
+        public void run() {
+            //LISTEN FOR KEYBOARD INPUT
+            String line="";
+            while(true){
+
+                BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+                System.out.println("Type the message to broadcast (exit to leave)...");
+                try {
+                    line = br.readLine();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                if(line.equals("exit")){
+                    groupMember.sendLeaveMsg();
+                }
+                else{
+                    groupMember.sendMsg(line);
+                }
             }
         }
     }
