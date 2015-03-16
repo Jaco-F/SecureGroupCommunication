@@ -3,8 +3,7 @@ import utils.*;
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
 import java.security.*;
 
 /**
@@ -17,7 +16,7 @@ public class GroupMember implements Runnable{
     private SecretKey dek;
     private SecretKey[] keks;
 
-    private ServerSocket listeningSocket;
+    private MulticastSocket listeningSocket;
 
     private Socket serverSocket;
     private String address;
@@ -26,16 +25,24 @@ public class GroupMember implements Runnable{
     private Cipher desCipher;
     private Cipher rsaCipher;
 
+    private final String serverAddress = "192.168.0.2";
+    private final int serverPort = 13000;
+
+    private String groupAddress = "192.168.0.0";
 
     public GroupMember(String ip, int port) {
         this.port = port;
         this.address = ip;
         keks = new SecretKey[3];
         try {
-            listeningSocket = new ServerSocket(port);
+            //Prepare to join multicast group
+            listeningSocket = new MulticastSocket(port);
+            InetAddress address = InetAddress.getByName(groupAddress);
+            listeningSocket.joinGroup(address);
         } catch (IOException e) {
             e.printStackTrace();
         }
+
         //-----------------------------------------
         //GENERATE PUBLIC AND PRIVATE KEY
         //-----------------------------------------
@@ -62,11 +69,6 @@ public class GroupMember implements Runnable{
             e.printStackTrace();
         }
 
-        try {
-            serverSocket = new Socket("localhost",12000);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
     }
 
@@ -75,15 +77,21 @@ public class GroupMember implements Runnable{
         join();
         Thread writeThread = new Thread(new WriteChat(this));
         writeThread.start();
-        Socket senderSocket;
 
         Message inputMsg;
         ObjectInputStream objectInputStream;
 
+
         while (true){
             try {
-                senderSocket = listeningSocket.accept();
-                objectInputStream = new ObjectInputStream(senderSocket.getInputStream());
+
+                byte[] b = new byte[65535];
+                ByteArrayInputStream bis = new ByteArrayInputStream(b);
+                DatagramPacket dgram = new DatagramPacket(b, b.length);
+
+                listeningSocket.receive(dgram);
+
+                objectInputStream = new ObjectInputStream(bis);
                 inputMsg = (Message)objectInputStream.readObject();
 
                 if(inputMsg instanceof ServerJoinKeys){
@@ -200,11 +208,16 @@ public class GroupMember implements Runnable{
 
         ServerJoinKeys initMessage = null;
 
-        Socket senderSocket;
-
         //------------------------------------------------------
         //CONNECT TO THE SERVER AND SEND HIM THE JOIN MESSAGE
         //------------------------------------------------------
+
+        try {
+            serverSocket = new Socket(serverAddress,serverPort);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         try {
             objectOutputStream = new ObjectOutputStream(serverSocket.getOutputStream());
         } catch (IOException e) {
@@ -225,8 +238,14 @@ public class GroupMember implements Runnable{
         //-----------------------------------------------------
 
         try {
-            senderSocket = listeningSocket.accept();
-            objectInputStream = new ObjectInputStream(senderSocket.getInputStream());
+
+            byte[] b = new byte[65535];
+            ByteArrayInputStream bis = new ByteArrayInputStream(b);
+            DatagramPacket dgram = new DatagramPacket(b, b.length);
+
+            listeningSocket.receive(dgram);
+
+            objectInputStream = new ObjectInputStream(bis);
             initMessage = (ServerJoinKeys)objectInputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
@@ -279,7 +298,7 @@ public class GroupMember implements Runnable{
         txMessage.setAddress(address);
         txMessage.setPort(port);
         try {
-            serverSocket = new Socket("localhost",12000);
+            serverSocket = new Socket(serverAddress,serverPort);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -316,7 +335,7 @@ public class GroupMember implements Runnable{
         //CONNECT TO THE SERVER AND SEND HIM THE LEAVE MESSAGE
         //------------------------------------------------------
         try {
-            serverSocket = new Socket("localhost",12000);
+            serverSocket = new Socket(serverAddress,serverPort);
             objectOutputStream = new ObjectOutputStream(serverSocket.getOutputStream());
         } catch (IOException e) {
             System.out.println("Cannot create objectOutputStream");

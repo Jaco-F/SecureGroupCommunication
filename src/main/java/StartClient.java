@@ -4,7 +4,7 @@
 public class StartClient {
     public static void main(String[] args) throws InterruptedException {
 
-        Thread memberThread = new Thread(new GroupMember("localhost",10000));
+        Thread memberThread = new Thread(new GroupMember("192.168.0.3",12000));
         memberThread.start();
         memberThread.join();
     }
