@@ -164,7 +164,7 @@ public class GroupMember implements Runnable{
                         decKek = desCipher.doFinal(firstPhaseDecriptedKek);
                         keks[0] = new SecretKeySpec(decKek,0,decKek.length,"DES");
                     } catch (BadPaddingException e) {
-                        System.out.println("I don't need the kek 1");
+                        System.out.println("I don't need kek 1");
                     }
                     try {
                         desCipher.init(Cipher.DECRYPT_MODE,dek);
@@ -173,7 +173,7 @@ public class GroupMember implements Runnable{
                         decKek = desCipher.doFinal(firstPhaseDecriptedKek);
                         keks[1] = new SecretKeySpec(decKek,0,decKek.length,"DES");
                     } catch (BadPaddingException e) {
-                        System.out.println("I don't need the kek 2");
+                        System.out.println("I don't need kek 2");
                     }
                     try {
                         desCipher.init(Cipher.DECRYPT_MODE,dek);
@@ -182,7 +182,7 @@ public class GroupMember implements Runnable{
                         decKek = desCipher.doFinal(firstPhaseDecriptedKek);
                         keks[2] = new SecretKeySpec(decKek,0,decKek.length,"DES");
                     } catch (BadPaddingException e) {
-                        System.out.println("I don't need the kek 3");
+                        System.out.println("I don't need kek 3");
                     }
                 }
 

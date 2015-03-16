@@ -45,8 +45,12 @@ public class GroupMaster implements Runnable {
     private Cipher desCipher;
     private Cipher rsaCipher;
 
+    private final Object lockJoin;
+
     public GroupMaster() {
         namingSlotStatus = new boolean[MAX_MEMBERS_ALLOWED];
+
+        lockJoin = new Object();
 
         for (int i = 0; i < MAX_MEMBERS_ALLOWED; i++) {
             namingSlotStatus[i] = false;
@@ -78,7 +82,7 @@ public class GroupMaster implements Runnable {
             serverSocket = new ServerSocket(serverPort);
         } catch (IOException e) {
             System.out.println("Error in Server creation");
-            e.printStackTrace();
+            //e.printStackTrace();
         }
         System.out.println("Server started on port : " + serverPort);
 
@@ -139,13 +143,19 @@ public class GroupMaster implements Runnable {
         }
 
 
-        private synchronized void handleJoin(JoinMessage message) {
-
+        private void handleJoin(JoinMessage message) {
             int availableId = -1;
+
 
             while (namingMap.size() >= MAX_MEMBERS_ALLOWED) {
                 try {
-                    wait();
+                    System.out.println("In wait...");
+
+                    synchronized (lockJoin){
+                        lockJoin.wait();
+                    }
+
+                    System.out.println("Wait finished");
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -205,7 +215,11 @@ public class GroupMaster implements Runnable {
                 tableManager.recomputeKeks(leaveMember);
                 sendKeysLeave(leaveMember);
 
-                notifyAll();
+                System.out.println("Notifying all");
+                synchronized (lockJoin){
+                    lockJoin.notifyAll();
+                }
+                System.out.println("Notify done");
             }
 
 
@@ -494,7 +508,7 @@ public class GroupMaster implements Runnable {
         }
 
         public void recomputeKeks(int memberId) {
-            System.out.println("Recomputing keks");
+            System.out.println("Recomputing keks...");
             String binaryId = Converter.binaryConversion(memberId);
             for (int i = 0; i < 3; i++) {
 
@@ -504,6 +518,8 @@ public class GroupMaster implements Runnable {
 
                 int index = Character.getNumericValue(binaryId.charAt(i));
                 kekTable[index][i] = keygen.generateKey();
+
+                System.out.println("Changed kek "+index+i);
 
             }
         }
