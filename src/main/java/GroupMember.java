@@ -28,7 +28,7 @@ public class GroupMember implements Runnable{
     private final String serverAddress = "192.168.0.2";
     private final int serverPort = 13000;
 
-    private String groupAddress = "192.168.0.0";
+    private String groupAddress = "239.0.0.1";
 
     public GroupMember(String ip, int port) {
         this.port = port;
@@ -38,6 +38,7 @@ public class GroupMember implements Runnable{
             //Prepare to join multicast group
             listeningSocket = new MulticastSocket(port);
             InetAddress address = InetAddress.getByName(groupAddress);
+
             listeningSocket.joinGroup(address);
         } catch (IOException e) {
             e.printStackTrace();
@@ -88,7 +89,6 @@ public class GroupMember implements Runnable{
                 byte[] b = new byte[65535];
                 ByteArrayInputStream bis = new ByteArrayInputStream(b);
                 DatagramPacket dgram = new DatagramPacket(b, b.length);
-
                 listeningSocket.receive(dgram);
 
                 objectInputStream = new ObjectInputStream(bis);
