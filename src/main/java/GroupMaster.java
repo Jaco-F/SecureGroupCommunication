@@ -2,12 +2,8 @@
 import utils.*;
 
 import javax.crypto.*;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
@@ -36,6 +32,8 @@ class MappingSocket implements Serializable{
 
 public class GroupMaster implements Runnable {
     private final static int MAX_MEMBERS_ALLOWED = 8;
+    private final static String MCAST_ADDR = "239.0.0.1";
+    private final static int DEST_PORT = 12345;
 
     private HashMap<Integer,MappingSocket> namingMap;
     private boolean[] namingSlotStatus;
@@ -73,7 +71,7 @@ public class GroupMaster implements Runnable {
 
     @Override
     public void run() {
-        final int serverPort = 12000;
+        final int serverPort = 13000;
         ServerSocket serverSocket = null;
 
         System.out.println("Server is starting on port : " + serverPort);
@@ -137,7 +135,7 @@ public class GroupMaster implements Runnable {
                 handleLeave((LeaveMessage) messageIn);
             } else if (messageIn instanceof TextMessage) {
                 System.out.println("Text Message received");
-                broadcastText((TextMessage) messageIn);
+                broadcastMessage(messageIn);
             }
 
         }
@@ -173,18 +171,18 @@ public class GroupMaster implements Runnable {
 
                 if (availableId != -1) {
                     namingSlotStatus[availableId] = true;
-                    namingMap.put(availableId,new MappingSocket(message.getSourcePort(), message.getSourceIP()));
-                    }
+                    namingMap.put(availableId, new MappingSocket(message.getSourcePort(), message.getSourceIP()));
+
                     tableManager.recomputeDek();
                     tableManager.recomputeKeks(availableId);
 
-                    sendKeysJoin(message.getPublicKey(),availableId);
-
-                System.out.println(message.getSourceIP() + " now is in the group!");
+                    sendKeysJoin(message.getPublicKey(), availableId);
+                    System.out.println(message.getSourceIP() + " now is in the group!");
+                }
             }
         }
 
-        private synchronized void handleLeave(LeaveMessage message) {
+        private void handleLeave(LeaveMessage message) {
             //CHECK IF THE CLIENT EXISTS
             Boolean memberPresent = false;
             for (int i = 0; i < namingMap.size();i++) {
@@ -268,9 +266,16 @@ public class GroupMaster implements Runnable {
 
             //SEND THE MESSAGE TO THE NEW ENTRY
             try {
-                Socket socket = new Socket(namingMap.get(newEntryId).getAddress(),namingMap.get(newEntryId).getPort());
-                ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                objectOutputStream.writeObject(serverJoinKeys);
+                DatagramSocket socket = new DatagramSocket();
+                ByteArrayOutputStream b_out = new ByteArrayOutputStream();
+                ObjectOutputStream o_out = new ObjectOutputStream(b_out);
+
+                o_out.writeObject(serverJoinKeys);
+
+                byte[] b = b_out.toByteArray();
+
+                DatagramPacket dgram = new DatagramPacket(b, b.length,InetAddress.getByName(namingMap.get(newEntryId).getAddress()), DEST_PORT);
+                socket.send(dgram);
                 socket.close();
 
             } catch (IOException e) {
@@ -307,7 +312,8 @@ public class GroupMaster implements Runnable {
                 e.printStackTrace();
             }
 
-            broadcastJoin(serverJoinKeys, newEntryId);
+            //broadcastJoin(serverJoinKeys, newEntryId);
+            broadcastMessage(serverJoinKeys);
 
         }
 
@@ -330,19 +336,19 @@ public class GroupMaster implements Runnable {
                 int index = 1 - Character.getNumericValue(binaryId.charAt(0));
                 desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][0]);
                 serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastLeaveDek(serverLeaveDek);
+                broadcastMessage(serverLeaveDek);
 
                 //ENCRYPT NEW DEK WITH KEK1
                 index = 1 - Character.getNumericValue(binaryId.charAt(1));
                 desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][1]);
                 serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastLeaveDek(serverLeaveDek);
+                broadcastMessage(serverLeaveDek);
 
                 //ENCRYPT NEW DEK WITH KEK1
                 index = 1 - Character.getNumericValue(binaryId.charAt(2));
                 desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][2]);
                 serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastLeaveDek(serverLeaveDek);
+                broadcastMessage(serverLeaveDek);
 
             } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
                 System.out.println("Error in encrypting the dek during leaving distribution dek process");
@@ -390,82 +396,31 @@ public class GroupMaster implements Runnable {
                 //e.printStackTrace();
             }
             System.out.println("Sending new keks");
-            broadcastLeaveKek(serverLeaveKeys);
+            broadcastMessage(serverLeaveKeys);
         }
 
+        private void broadcastMessage(Message message) {
+            MulticastSocket socket = null;
 
-        private void broadcastJoin(ServerJoinKeys serverJoinKeys, int newEntryId) {
-            for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
-                if (namingSlotStatus[i]&&(i != newEntryId)) {
-                    try {
-                        Socket socket = new Socket(namingMap.get(i).getAddress(),namingMap.get(i).getPort());
-                        ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                        objectOutputStream.writeObject(serverJoinKeys);
-                        socket.close();
-                    } catch (IOException e) {
-                        System.out.println("Error in new dek-kek message send to "+ i);
-                        e.printStackTrace();
-                    }
-                }
+            try {
+                socket = new MulticastSocket();
+
+                ByteArrayOutputStream b_out = new ByteArrayOutputStream();
+                ObjectOutputStream o_out = new ObjectOutputStream(b_out);
+
+                o_out.writeObject(message);
+
+                byte[] outBuf = b_out.toByteArray();
+
+                DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length,InetAddress.getByName(MCAST_ADDR), DEST_PORT);
+                socket.setTimeToLive(1);
+                socket.send(dgram);
+                socket.close();
+
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
-
-        private void broadcastLeaveDek(ServerLeaveDek serverLeaveDek){
-            for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
-                if (namingSlotStatus[i]) {
-                    try {
-                        Socket socket = new Socket(namingMap.get(i).getAddress(),namingMap.get(i).getPort());
-                        ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                        objectOutputStream.writeObject(serverLeaveDek);
-                        socket.close();
-                    } catch (IOException e) {
-                        System.out.println("Error in new dek message send to "+ i);
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }
-
-        private void broadcastLeaveKek(ServerLeaveKek serverLeaveKek) {
-
-            for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
-                if (namingSlotStatus[i]) {
-                    try {
-                        Socket socket = new Socket(namingMap.get(i).getAddress(),namingMap.get(i).getPort());
-                        ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                        objectOutputStream.writeObject(serverLeaveKek);
-                        socket.close();
-                    } catch (IOException e) {
-                        System.out.println("Error in new kek message send to "+ i);
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }
-        private void broadcastText(TextMessage messageIn) {
-            int sender = -1;
-            for (int i = 0; i < namingMap.size(); i++){
-                MappingSocket ms = namingMap.get(i);
-                if (ms.getAddress().equals(messageIn.getAddress()) && ms.getPort() == messageIn.getPort()) {
-                    sender = i;
-                }
-            }
-
-            for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
-                if (namingSlotStatus[i] && (i!=sender)) {
-                    try {
-                        Socket socket = new Socket(namingMap.get(i).getAddress(),namingMap.get(i).getPort());
-                        ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                        objectOutputStream.writeObject(messageIn);
-                        socket.close();
-                    } catch (IOException e) {
-                        System.out.println("Error in Send Text Message");
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }
-
     }
 
     class TableManager {
