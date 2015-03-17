@@ -133,11 +133,7 @@ public class GroupMaster implements Runnable {
             } else if (messageIn instanceof LeaveMessage) {
                 System.out.println("Leave Message received");
                 handleLeave((LeaveMessage) messageIn);
-            } else if (messageIn instanceof TextMessage) {
-                System.out.println("Text Message received");
-                broadcastMessage(messageIn);
             }
-
         }
 
 
