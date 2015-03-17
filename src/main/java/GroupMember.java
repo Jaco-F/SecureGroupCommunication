@@ -292,37 +292,39 @@ public class GroupMember implements Runnable{
 
     }
 
-    private void sendMsg(String msg){
+
+    private void broadcastMessage(String msg) {
         ObjectOutputStream objectOutputStream = null;
         TextMessage txMessage = new TextMessage();
-        txMessage.setAddress(address);
-        txMessage.setPort(port);
         try {
-            serverSocket = new Socket(serverAddress,serverPort);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        try {
-            desCipher.init(Cipher.ENCRYPT_MODE,dek);
-            byte[] msgEnc = desCipher.doFinal(msg.getBytes());
-            txMessage.setText(msgEnc);
-        } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
-            e.printStackTrace();
-        }
 
-        try {
-            objectOutputStream = new ObjectOutputStream(serverSocket.getOutputStream());
-        } catch (IOException e) {
-            System.out.println("Cannot create objectOutputStream");
-            e.printStackTrace();
-        }
+            try {
+                desCipher.init(Cipher.ENCRYPT_MODE,dek);
+                byte[] msgEnc = desCipher.doFinal(msg.getBytes());
+                txMessage.setText(msgEnc);
+                txMessage.setAddress(address);
+                txMessage.setPort(port);
+            } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
+                e.printStackTrace();
+            }
 
-        try {
+            ByteArrayOutputStream b_out = new ByteArrayOutputStream();
+            try {
+                objectOutputStream = new ObjectOutputStream(b_out);
+            } catch (IOException e) {
+                System.out.println("Cannot create objectOutputStream");
+                e.printStackTrace();
+            }
+
             objectOutputStream.writeObject(txMessage);
-            objectOutputStream.close();
-            serverSocket.close();
+
+            byte[] outBuf = b_out.toByteArray();
+
+            DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length,InetAddress.getByName(groupAddress), port);
+            listeningSocket.setTimeToLive(1);
+            listeningSocket.send(dgram);
+
         } catch (IOException e) {
-            System.out.println("Cannot write object to group master");
             e.printStackTrace();
         }
     }
@@ -379,7 +381,7 @@ public class GroupMember implements Runnable{
                     groupMember.sendLeaveMsg();
                 }
                 else{
-                    groupMember.sendMsg(line);
+                    groupMember.broadcastMessage(line);
                 }
             }
         }
