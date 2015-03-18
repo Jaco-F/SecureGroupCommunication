@@ -142,7 +142,8 @@ public class GroupMember implements Runnable{
                     try {
                         byte [] decMsg = desCipher.doFinal(txMessage.getText());
                         String msg = new String(decMsg);
-                        System.out.println(txMessage.getAddress() + " - " + txMessage.getPort() + " : " + msg);
+                        InetSocketAddress inetSocketAddress = (InetSocketAddress) listeningSocket.getRemoteSocketAddress();
+                        System.out.println(inetSocketAddress.getAddress().toString() + " : " + msg);
                     } catch (BadPaddingException e) {
                         System.out.println("Received a message I couldn't decrypt");
                     }
@@ -202,7 +203,7 @@ public class GroupMember implements Runnable{
     }
 
     private void join(){
-        Message message = new JoinMessage(publicKey,this.address, this.port);
+        Message message = new JoinMessage(publicKey);
         ObjectOutputStream objectOutputStream = null;
         ObjectInputStream objectInputStream = null;
 
@@ -302,8 +303,6 @@ public class GroupMember implements Runnable{
                 desCipher.init(Cipher.ENCRYPT_MODE,dek);
                 byte[] msgEnc = desCipher.doFinal(msg.getBytes());
                 txMessage.setText(msgEnc);
-                txMessage.setAddress(address);
-                txMessage.setPort(port);
             } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                 e.printStackTrace();
             }
@@ -330,7 +329,7 @@ public class GroupMember implements Runnable{
     }
 
     private void sendLeaveMsg() {
-        Message message = new LeaveMessage(this.address, this.port);
+        Message message = new LeaveMessage();
         ObjectOutputStream objectOutputStream = null;
 
         //------------------------------------------------------
