@@ -126,7 +126,10 @@ public class GroupMaster implements Runnable {
 
         private void handleJoin(JoinMessage message, InetAddress address) {
             int availableId = -1;
-
+            if (namingMap.containsValue(address)) {
+                System.out.println("Received a join message from a member already in the group");
+                return;
+            }
 
             while (namingMap.size() >= MAX_MEMBERS_ALLOWED) {
                 try {
@@ -145,6 +148,7 @@ public class GroupMaster implements Runnable {
             if (namingMap.size() < MAX_MEMBERS_ALLOWED) {
                 System.out.println("Receiving join message .. ");
                 //FIND AVAILABLE ID FOR THE MEMBER REQUESTING ACCESS
+
                 for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
                     if (!namingSlotStatus[i]) {
                         availableId = i;
@@ -168,10 +172,12 @@ public class GroupMaster implements Runnable {
         private void handleLeave(InetAddress address) {
             //CHECK IF THE CLIENT EXISTS
             Boolean memberPresent = false;
-            for (int i = 0; i < namingMap.size();i++) {
-                InetAddress senderAddress = namingMap.get(i);
-                if(senderAddress.getAddress().equals(address)) {
-                    memberPresent = true;
+            for (int i = 0; i <= namingMap.size();i++) {
+                if (namingSlotStatus[i]) {
+                    InetAddress senderAddress = namingMap.get(i);
+                    if (senderAddress.equals(address)) {
+                        memberPresent = true;
+                    }
                 }
             }
             if (!memberPresent) {
@@ -181,9 +187,9 @@ public class GroupMaster implements Runnable {
 
             int leaveMember = -1;
 
-            for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
+            for (int i = 0; i<= namingMap.size();i++){
                 if (namingSlotStatus[i]) {
-                    if (namingMap.get(i).getAddress().equals(address)){
+                    if (namingMap.get(i).equals(address)){
                         leaveMember = i;
                     }
                 }
@@ -371,18 +377,12 @@ public class GroupMaster implements Runnable {
                 //e.printStackTrace();
             }
 
-            //TODO: TOGLIERE ASSOLUTAMENTE E' SOLO PER EVITARE DI FARE I SYNCRONIZED AL MOMENTO
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                //e.printStackTrace();
-            }
             System.out.println("Sending new keks");
             broadcastMessage(serverLeaveKeys);
         }
 
         private void broadcastMessage(Message message) {
-            MulticastSocket socket = null;
+            MulticastSocket socket;
 
             try {
                 socket = new MulticastSocket();
