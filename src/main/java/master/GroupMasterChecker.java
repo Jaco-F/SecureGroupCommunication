@@ -16,9 +16,11 @@ class GroupMasterChecker implements Runnable {
     private final int MONITORING_PORT = 15000;
     ServerSocket monitoringSocket;
     MulticastSocket socket;
+    GroupMasterManageMessages groupMasterManageMessages;
     GroupMaster groupMaster;
 
-    public GroupMasterChecker(GroupMaster groupMaster) {
+    public GroupMasterChecker(GroupMasterManageMessages groupMasterManageMessages,GroupMaster groupMaster) {
+        this.groupMasterManageMessages = groupMasterManageMessages;
         this.groupMaster = groupMaster;
         try {
             monitoringSocket = new ServerSocket(MONITORING_PORT);
@@ -31,7 +33,7 @@ class GroupMasterChecker implements Runnable {
     public void run() {
         List<InetAddress> members;
         while (true) {
-            members = new ArrayList<InetAddress>(namingMap.values());
+            members = new ArrayList<InetAddress>(groupMaster.namingMap.values());
 
             try {
                 socket = new MulticastSocket();
@@ -43,7 +45,7 @@ class GroupMasterChecker implements Runnable {
 
                 byte[] outBuf = b_out.toByteArray();
 
-                DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length, InetAddress.getByName(MCAST_ADDR), MONITORING_PORT);
+                DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length, InetAddress.getByName(GroupMaster.MCAST_ADDR), MONITORING_PORT);
                 socket.setTimeToLive(1);
                 socket.send(dgram);
                 socket.close();
@@ -68,7 +70,7 @@ class GroupMasterChecker implements Runnable {
                 }
 
                 for (InetAddress a : members) {
-                    handleLeave(a);
+                    groupMasterManageMessages.handleLeave(a);
                 }
 
 

@@ -77,11 +77,11 @@ class GroupMasterManageMessages implements Runnable {
             }
         }
 
-        if ((groupMaster.namingMap.size() < groupMaster.MAX_MEMBERS_ALLOWED) {
+        if (groupMaster.namingMap.size() < GroupMaster.MAX_MEMBERS_ALLOWED) {
             System.out.println("Receiving join message .. ");
             //FIND AVAILABLE ID FOR THE MEMBER REQUESTING ACCESS
 
-            for (int i = 0; i < groupMaster.MAX_MEMBERS_ALLOWED; i++) {
+            for (int i = 0; i < GroupMaster.MAX_MEMBERS_ALLOWED; i++) {
                 if (!groupMaster.namingSlotStatus[i]) {
                     availableId = i;
                     break;
@@ -90,7 +90,7 @@ class GroupMasterManageMessages implements Runnable {
 
             if (availableId != -1) {
                 groupMaster.namingSlotStatus[availableId] = true;
-                (groupMaster.namingMap.put(availableId, address);
+                groupMaster.namingMap.put(availableId, address);
 
                 groupMaster.tableManager.recomputeDek();
                 groupMaster.tableManager.recomputeKeks(availableId);
@@ -101,7 +101,7 @@ class GroupMasterManageMessages implements Runnable {
         }
     }
 
-    private void handleLeave(InetAddress address) {
+    protected void handleLeave(InetAddress address) {
         //CHECK IF THE CLIENT EXISTS
         Boolean memberPresent = false;
         for (int i = 0; i <= groupMaster.namingMap.size(); i++) {
