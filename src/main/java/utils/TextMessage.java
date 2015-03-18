@@ -7,9 +7,18 @@ import java.io.Serializable;
  */
 public class TextMessage implements Message,Serializable{
     private byte[] text;
-    private String address;
+    private String hostName;
+
 
     public TextMessage() {
+    }
+
+    public String getHostName() {
+        return hostName;
+    }
+
+    public void setHostName(String hostName) {
+        this.hostName = hostName;
     }
 
     public byte[] getText() {
@@ -18,14 +27,6 @@ public class TextMessage implements Message,Serializable{
 
     public void setText(byte[] text) {
         this.text = text;
-    }
-
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
     }
 
 }

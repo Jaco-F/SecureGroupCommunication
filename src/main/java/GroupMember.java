@@ -19,7 +19,6 @@ public class GroupMember implements Runnable{
     private MulticastSocket listeningSocket;
 
     private Socket serverSocket;
-    //private String address;
     private int port;
 
     private Cipher desCipher;
@@ -28,17 +27,19 @@ public class GroupMember implements Runnable{
     private final String serverAddress = "192.168.0.2";
     private final int serverPort = 13000;
 
+    private  String hostName ="";
+
     private String groupAddress = "239.0.0.1";
 
-    public GroupMember(String ip, int port) {
+    public GroupMember(int port) {
         this.port = port;
-        //this.address = ip;
         keks = new SecretKey[3];
+
         try {
             //Prepare to join multicast group
             listeningSocket = new MulticastSocket(port);
             InetAddress address = InetAddress.getByName(groupAddress);
-
+            hostName = Inet4Address.getLocalHost().getHostName();
             listeningSocket.joinGroup(address);
         } catch (IOException e) {
             e.printStackTrace();
@@ -142,7 +143,7 @@ public class GroupMember implements Runnable{
                     try {
                         byte [] decMsg = desCipher.doFinal(txMessage.getText());
                         String msg = new String(decMsg);
-                        System.out.println(txMessage.getAddress() + " : " + msg);
+                        System.out.println(txMessage.getHostName() + " : " + msg);
                     } catch (BadPaddingException e) {
                         System.out.println("Received a message I couldn't decrypt");
                     }
@@ -302,8 +303,7 @@ public class GroupMember implements Runnable{
                 desCipher.init(Cipher.ENCRYPT_MODE,dek);
                 byte[] msgEnc = desCipher.doFinal(msg.getBytes());
                 txMessage.setText(msgEnc);
-                String address = Inet4Address.getLocalHost().getHostAddress();
-                txMessage.setAddress(address);
+                txMessage.setHostName(hostName);
             } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                 e.printStackTrace();
             }
