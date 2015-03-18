@@ -12,30 +12,13 @@ import java.util.HashMap;
 /**
  * Created by Jacopo on 11/03/2015.
  */
-class MappingSocket implements Serializable{
-    private final int port;
-    private final String address;
-
-    public MappingSocket(int port, String address) {
-        this.port = port;
-        this.address = address;
-    }
-
-    public int getPort() {
-        return port;
-    }
-
-    public String getAddress() {
-        return address;
-    }
-}
 
 public class GroupMaster implements Runnable {
     private final static int MAX_MEMBERS_ALLOWED = 8;
     private final static String MCAST_ADDR = "239.0.0.1";
     private final static int DEST_PORT = 12345;
 
-    private HashMap<Integer,MappingSocket> namingMap;
+    private HashMap<Integer,InetAddress> namingMap;
     private boolean[] namingSlotStatus;
 
     private TableManager tableManager;
@@ -54,7 +37,7 @@ public class GroupMaster implements Runnable {
             namingSlotStatus[i] = false;
         }
         tableManager = new TableManager();
-        namingMap = new HashMap<Integer,MappingSocket>();
+        namingMap = new HashMap<Integer,InetAddress>();
 
         try {
             desCipher = Cipher.getInstance("DES");
@@ -86,6 +69,7 @@ public class GroupMaster implements Runnable {
 
         while(true) {
             Socket client = null;
+            SocketAddress socketAddress = null;
             //WAIT MESSAGE
             try {
                 client = serverSocket.accept();
@@ -103,9 +87,12 @@ public class GroupMaster implements Runnable {
 
     class GroupMasterManageMessages implements Runnable{
         private Socket memberSocket;
+        private InetSocketAddress socketAddress;
 
         public GroupMasterManageMessages(Socket clientSocket) {
             memberSocket = clientSocket;
+            socketAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
+
         }
 
         @Override
@@ -129,15 +116,15 @@ public class GroupMaster implements Runnable {
 
             if (messageIn instanceof JoinMessage) {
                 System.out.println("Join Message received");
-                handleJoin((JoinMessage) messageIn);
+                handleJoin((JoinMessage) messageIn, socketAddress.getAddress());
             } else if (messageIn instanceof LeaveMessage) {
                 System.out.println("Leave Message received");
-                handleLeave((LeaveMessage) messageIn);
+                handleLeave(socketAddress.getAddress());
             }
         }
 
 
-        private void handleJoin(JoinMessage message) {
+        private void handleJoin(JoinMessage message, InetAddress address) {
             int availableId = -1;
 
 
@@ -167,23 +154,23 @@ public class GroupMaster implements Runnable {
 
                 if (availableId != -1) {
                     namingSlotStatus[availableId] = true;
-                    namingMap.put(availableId, new MappingSocket(message.getSourcePort(), message.getSourceIP()));
+                    namingMap.put(availableId, address);
 
                     tableManager.recomputeDek();
                     tableManager.recomputeKeks(availableId);
 
                     sendKeysJoin(message.getPublicKey(), availableId);
-                    System.out.println(message.getSourceIP() + " now is in the group!");
+                    System.out.println(address.getHostAddress() + " now is in the group!");
                 }
             }
         }
 
-        private void handleLeave(LeaveMessage message) {
+        private void handleLeave(InetAddress address) {
             //CHECK IF THE CLIENT EXISTS
             Boolean memberPresent = false;
             for (int i = 0; i < namingMap.size();i++) {
-                MappingSocket ms = namingMap.get(i);
-                if(ms.getAddress().equals(message.getAddress()) && ms.getPort() == message.getPort()) {
+                InetAddress senderAddress = namingMap.get(i);
+                if(senderAddress.getAddress().equals(address)) {
                     memberPresent = true;
                 }
             }
@@ -194,10 +181,9 @@ public class GroupMaster implements Runnable {
 
             int leaveMember = -1;
 
-            MappingSocket mappingSocket = new MappingSocket(message.getPort(),message.getAddress());
             for (int i = 0; i< MAX_MEMBERS_ALLOWED;i++){
                 if (namingSlotStatus[i]) {
-                    if (namingMap.get(i).getAddress().equals(mappingSocket.getAddress()) && namingMap.get(i).getPort() == mappingSocket.getPort()){
+                    if (namingMap.get(i).getAddress().equals(address)){
                         leaveMember = i;
                     }
                 }
@@ -270,7 +256,7 @@ public class GroupMaster implements Runnable {
 
                 byte[] b = b_out.toByteArray();
 
-                DatagramPacket dgram = new DatagramPacket(b, b.length,InetAddress.getByName(namingMap.get(newEntryId).getAddress()), DEST_PORT);
+                DatagramPacket dgram = new DatagramPacket(b, b.length, namingMap.get(newEntryId), DEST_PORT);
                 socket.send(dgram);
                 socket.close();
 
