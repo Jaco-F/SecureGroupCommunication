@@ -19,7 +19,7 @@ public class GroupMember implements Runnable{
     private MulticastSocket listeningSocket;
 
     private Socket serverSocket;
-    private String address;
+    //private String address;
     private int port;
 
     private Cipher desCipher;
@@ -32,7 +32,7 @@ public class GroupMember implements Runnable{
 
     public GroupMember(String ip, int port) {
         this.port = port;
-        this.address = ip;
+        //this.address = ip;
         keks = new SecretKey[3];
         try {
             //Prepare to join multicast group
@@ -142,8 +142,7 @@ public class GroupMember implements Runnable{
                     try {
                         byte [] decMsg = desCipher.doFinal(txMessage.getText());
                         String msg = new String(decMsg);
-                        InetSocketAddress inetSocketAddress = (InetSocketAddress) listeningSocket.getRemoteSocketAddress();
-                        System.out.println(inetSocketAddress.getAddress().toString() + " : " + msg);
+                        System.out.println(txMessage.getAddress() + " : " + msg);
                     } catch (BadPaddingException e) {
                         System.out.println("Received a message I couldn't decrypt");
                     }
@@ -303,6 +302,8 @@ public class GroupMember implements Runnable{
                 desCipher.init(Cipher.ENCRYPT_MODE,dek);
                 byte[] msgEnc = desCipher.doFinal(msg.getBytes());
                 txMessage.setText(msgEnc);
+                String address = Inet4Address.getLocalHost().getHostAddress();
+                txMessage.setAddress(address);
             } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                 e.printStackTrace();
             }
