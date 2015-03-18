@@ -35,16 +35,6 @@ public class GroupMember implements Runnable{
         this.port = port;
         keks = new SecretKey[3];
 
-        try {
-            //Prepare to join multicast group
-            listeningSocket = new MulticastSocket(port);
-            InetAddress address = InetAddress.getByName(groupAddress);
-            hostName = Inet4Address.getLocalHost().getHostName();
-            listeningSocket.joinGroup(address);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         //-----------------------------------------
         //GENERATE PUBLIC AND PRIVATE KEY
         //-----------------------------------------
@@ -206,8 +196,19 @@ public class GroupMember implements Runnable{
         Message message = new JoinMessage(publicKey);
         ObjectOutputStream objectOutputStream = null;
         ObjectInputStream objectInputStream = null;
-
         ServerJoinKeys initMessage = null;
+
+
+        try {
+            //Prepare to join multicast group
+            listeningSocket = new MulticastSocket(port);
+            InetAddress address = InetAddress.getByName(groupAddress);
+            hostName = Inet4Address.getLocalHost().getHostName();
+            listeningSocket.joinGroup(address);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
 
         //------------------------------------------------------
         //CONNECT TO THE SERVER AND SEND HIM THE JOIN MESSAGE
