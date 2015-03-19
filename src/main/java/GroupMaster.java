@@ -90,7 +90,6 @@ public class GroupMaster implements Runnable {
         }
     }
 
-
     private void handleJoin(JoinMessage message, InetAddress address) {
         int availableId = -1;
         if (namingMap.containsValue(address)) {
@@ -370,7 +369,6 @@ public class GroupMaster implements Runnable {
         }
     }
 
-
     class GroupMasterManageMessages implements Runnable {
         private Socket memberSocket;
         private InetSocketAddress socketAddress;
@@ -455,11 +453,9 @@ public class GroupMaster implements Runnable {
                         Socket client = null;
                         //WAIT MESSAGE
                         try {
-                            System.out.println("Waiting alive...");
                             client = monitoringSocket.accept();
                             members.remove(((InetSocketAddress) client.getRemoteSocketAddress()).getAddress());
                         }  catch (IOException e) {
-                            System.out.println("Timer Expired");
                             socket.close();
                             break;
                         }
@@ -467,6 +463,7 @@ public class GroupMaster implements Runnable {
 
                     for (InetAddress a : members) {
                         handleLeave(a);
+                        System.out.println(a.toString() + " kicked out!");
                     }
 
 
