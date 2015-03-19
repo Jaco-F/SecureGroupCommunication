@@ -29,12 +29,8 @@ public class GroupMaster implements Runnable {
     private Cipher desCipher;
     private Cipher rsaCipher;
 
-    private final Object lockJoin;
-
     public GroupMaster() {
         namingSlotStatus = new boolean[MAX_MEMBERS_ALLOWED];
-
-        lockJoin = new Object();
 
         for (int i = 0; i < MAX_MEMBERS_ALLOWED; i++) {
             namingSlotStatus[i] = false;
@@ -91,7 +87,7 @@ public class GroupMaster implements Runnable {
         }
     }
 
-    private void handleJoin(JoinMessage message, InetAddress address) {
+    private synchronized void handleJoin(JoinMessage message, InetAddress address) {
         int availableId = -1;
         if (namingMap.containsValue(address)) {
             return;
@@ -100,11 +96,7 @@ public class GroupMaster implements Runnable {
         while (namingMap.size() >= MAX_MEMBERS_ALLOWED) {
             try {
                 System.out.println("In wait...");
-
-                synchronized (lockJoin) {
-                    lockJoin.wait();
-                }
-
+                this.wait();
                 System.out.println("Wait finished");
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -135,44 +127,33 @@ public class GroupMaster implements Runnable {
         }
     }
 
-    private void handleLeave(InetAddress address) {
+    private synchronized void handleLeave(InetAddress address) {
         //CHECK IF THE CLIENT EXISTS
-        Boolean memberPresent = false;
-        for (int i = 0; i < namingMap.size(); i++) {
+
+        int leaveMember = -1;
+        for (int i = 0; i < MAX_MEMBERS_ALLOWED; i++) {
             if (namingSlotStatus[i]) {
-                InetAddress senderAddress = namingMap.get(i);
-                if (senderAddress.equals(address)) {
-                    memberPresent = true;
+                if (namingMap.get(i).equals(address)) {
+                    leaveMember = i;
+                    break;
                 }
             }
         }
-        if (!memberPresent) {
+        if (leaveMember == -1) {
             System.out.println("Received a leave message from a non group member");
             return;
         }
 
-        int leaveMember = -1;
+        namingMap.remove(leaveMember);
+        namingSlotStatus[leaveMember] = false;
+        tableManager.recomputeDek();
+        tableManager.recomputeKeks(leaveMember);
+        sendKeysLeave(leaveMember);
 
-        for (int i = 0; i < namingMap.size(); i++) {
-            if (namingSlotStatus[i]) {
-                if (namingMap.get(i).equals(address)) {
-                    leaveMember = i;
-                }
-            }
-        }
-        if (leaveMember != -1) {
-            namingMap.remove(leaveMember);
-            namingSlotStatus[leaveMember] = false;
-            tableManager.recomputeDek();
-            tableManager.recomputeKeks(leaveMember);
-            sendKeysLeave(leaveMember);
+        System.out.println("Notifying all");
+        this.notify();
+        System.out.println("Notify done");
 
-            System.out.println("Notifying all");
-            synchronized (lockJoin) {
-                lockJoin.notifyAll();
-            }
-            System.out.println("Notify done");
-        }
 
 
     }
@@ -470,10 +451,11 @@ public class GroupMaster implements Runnable {
                     for (InetAddress a : members) {
                         handleLeave(a);
                         System.out.println(a.toString() + " kicked out!");
+                        Thread.sleep(5000);
                     }
 
 
-                } catch (IOException e) {
+                } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
                 }
 

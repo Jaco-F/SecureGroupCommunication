@@ -400,23 +400,32 @@ public class GroupMember implements Runnable{
             //LISTEN FOR KEYBOARD INPUT
             String line="";
             System.out.println("Welcome! Type the message to broadcast to the multicast group. :join to join or :leave to leave)");
+            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
             while(true){
-
-                BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
                 System.out.println("Type the message to broadcast (exit to leave)...");
                 try {
                     line = br.readLine();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                if(line.equals(":leave")){
-                    groupMember.sendLeaveMsg();
-                }
-                else if(line.equals(":join")){
-                    groupMember.join();
-                }
-                else{
-                    groupMember.broadcastMessage(line);
+                switch (line) {
+                    case ":leave":
+                        if (joined) {
+                            groupMember.sendLeaveMsg();
+                        } else {
+                            System.out.println("You are not in the group");
+                        }
+                        break;
+                    case ":join":
+                        if (!joined) {
+                            groupMember.join();
+                        } else {
+                            System.out.println("You already joined the group");
+                        }
+                        break;
+                    default:
+                        groupMember.broadcastMessage(line);
+                        break;
                 }
             }
         }
