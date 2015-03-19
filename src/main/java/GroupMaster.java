@@ -91,6 +91,286 @@ public class GroupMaster implements Runnable {
     }
 
 
+    private void handleJoin(JoinMessage message, InetAddress address) {
+        int availableId = -1;
+        if (namingMap.containsValue(address)) {
+            return;
+        }
+
+        while (namingMap.size() >= MAX_MEMBERS_ALLOWED) {
+            try {
+                System.out.println("In wait...");
+
+                synchronized (lockJoin) {
+                    lockJoin.wait();
+                }
+
+                System.out.println("Wait finished");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (namingMap.size() < MAX_MEMBERS_ALLOWED) {
+            System.out.println("Receiving join message .. ");
+            //FIND AVAILABLE ID FOR THE MEMBER REQUESTING ACCESS
+
+            for (int i = 0; i < MAX_MEMBERS_ALLOWED; i++) {
+                if (!namingSlotStatus[i]) {
+                    availableId = i;
+                    break;
+                }
+            }
+
+            if (availableId != -1) {
+                namingSlotStatus[availableId] = true;
+                namingMap.put(availableId, address);
+
+                tableManager.recomputeDek();
+                tableManager.recomputeKeks(availableId);
+
+                sendKeysJoin(message.getPublicKey(), availableId);
+                System.out.println(address.getHostAddress() + " now is in the group!");
+            }
+        }
+    }
+
+    private void handleLeave(InetAddress address) {
+        //CHECK IF THE CLIENT EXISTS
+        Boolean memberPresent = false;
+        for (int i = 0; i <= namingMap.size(); i++) {
+            if (namingSlotStatus[i]) {
+                InetAddress senderAddress = namingMap.get(i);
+                if (senderAddress.equals(address)) {
+                    memberPresent = true;
+                }
+            }
+        }
+        if (!memberPresent) {
+            System.out.println("Received a leave message from a non group member");
+            return;
+        }
+
+        int leaveMember = -1;
+
+        for (int i = 0; i <= namingMap.size(); i++) {
+            if (namingSlotStatus[i]) {
+                if (namingMap.get(i).equals(address)) {
+                    leaveMember = i;
+                }
+            }
+        }
+        if (leaveMember != -1) {
+            namingMap.remove(leaveMember);
+            namingSlotStatus[leaveMember] = false;
+            tableManager.recomputeDek();
+            tableManager.recomputeKeks(leaveMember);
+            sendKeysLeave(leaveMember);
+
+            System.out.println("Notifying all");
+            synchronized (lockJoin) {
+                lockJoin.notifyAll();
+            }
+            System.out.println("Notify done");
+        }
+
+
+    }
+
+    //------------------------------------------------------------------
+    //SEND THE NEW DEK AND KEKs TO THE NEW ENTRY ENCRYPTED WITH PK
+    //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE OLD DEK (?)(?)
+    //------------------------------------------------------------------
+    private void sendKeysJoin(PublicKey publicKey, int newEntryId) {
+        byte[] encryptedKeys;
+        SecretKey[][] kekTable = tableManager.getKekTable();
+
+        ServerJoinKeys serverJoinKeys = new ServerJoinKeys();
+
+        String binaryId = Converter.binaryConversion(newEntryId);
+
+        //ENCRYPT DEK AND KEKs TO BE SENT TO THE NEW ENTRY WITH HIS PK
+        try {
+            rsaCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        } catch (InvalidKeyException e) {
+            System.out.println("Can't initialize public key cipher");
+            e.printStackTrace();
+        }
+
+        try {
+            encryptedKeys = rsaCipher.doFinal(tableManager.getDek().getEncoded());
+            serverJoinKeys.setDek(encryptedKeys);
+
+            int index = Character.getNumericValue(binaryId.charAt(0));
+            encryptedKeys = rsaCipher.doFinal(kekTable[index][0].getEncoded());
+            serverJoinKeys.setKek1(encryptedKeys);
+
+            index = Character.getNumericValue(binaryId.charAt(1));
+            encryptedKeys = rsaCipher.doFinal(kekTable[index][1].getEncoded());
+            serverJoinKeys.setKek2(encryptedKeys);
+
+            index = Character.getNumericValue(binaryId.charAt(2));
+            encryptedKeys = rsaCipher.doFinal(kekTable[index][2].getEncoded());
+            serverJoinKeys.setKek3(encryptedKeys);
+
+        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            System.out.println("Error in building the keys package");
+            e.printStackTrace();
+        }
+
+        //SEND THE MESSAGE TO THE NEW ENTRY
+        try {
+            DatagramSocket socket = new DatagramSocket();
+            ByteArrayOutputStream b_out = new ByteArrayOutputStream();
+            ObjectOutputStream o_out = new ObjectOutputStream(b_out);
+
+            o_out.writeObject(serverJoinKeys);
+
+            byte[] b = b_out.toByteArray();
+
+            DatagramPacket dgram = new DatagramPacket(b, b.length, namingMap.get(newEntryId), DEST_PORT);
+            socket.send(dgram);
+            socket.close();
+
+        } catch (IOException e) {
+            System.out.println("Error in new dek message send to the new entry");
+            e.printStackTrace();
+        }
+
+        serverJoinKeys = new ServerJoinKeys();
+
+        SecretKey[][] oldKekTable = tableManager.getOldKekTable();
+
+        try {
+            //ENCRYPT NEW DEK WITH OLD DEK
+            desCipher.init(Cipher.ENCRYPT_MODE, tableManager.getOldDek());
+            serverJoinKeys.setDek(desCipher.doFinal(tableManager.getDek().getEncoded()));
+
+            //ENCRYPT NEW KEK1 WITH OLD KEK1
+            int index = Character.getNumericValue(binaryId.charAt(0));
+            desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][0]);
+            serverJoinKeys.setKek1(desCipher.doFinal(kekTable[index][0].getEncoded()));
+
+            //ENCRYPT NEW KEK2 WITH OLD KEK2
+            index = Character.getNumericValue(binaryId.charAt(1));
+            desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][1]);
+            serverJoinKeys.setKek2(desCipher.doFinal(kekTable[index][1].getEncoded()));
+
+            //ENCRYPT NEW KEK3 WITH OLD KEK3
+            index = Character.getNumericValue(binaryId.charAt(2));
+            desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][2]);
+            serverJoinKeys.setKek3(desCipher.doFinal(kekTable[index][2].getEncoded()));
+
+        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            System.out.println("Error in building the keys package");
+            e.printStackTrace();
+        }
+
+        //broadcastJoin(serverJoinKeys, newEntryId);
+        broadcastMessage(serverJoinKeys);
+
+    }
+
+    //------------------------------------------------------------------
+    //SEND THE NEW DEK AND KEKs TO THE OTHER MEMBERS
+    //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE KEK THAT THE LEAVE MEMBER NOT KNOW
+    //------------------------------------------------------------------
+    private void sendKeysLeave(int leaveId) {
+        SecretKey[][] kekTable = tableManager.getKekTable();
+
+        SecretKey dek = tableManager.getDek();
+
+        String binaryId = Converter.binaryConversion(leaveId);
+
+        ServerLeaveDek serverLeaveDek = new ServerLeaveDek();
+
+
+        try {
+            //ENCRYPT NEW DEK WITH KEK1
+            int index = 1 - Character.getNumericValue(binaryId.charAt(0));
+            desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][0]);
+            serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
+            broadcastMessage(serverLeaveDek);
+
+            //ENCRYPT NEW DEK WITH KEK1
+            index = 1 - Character.getNumericValue(binaryId.charAt(1));
+            desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][1]);
+            serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
+            broadcastMessage(serverLeaveDek);
+
+            //ENCRYPT NEW DEK WITH KEK1
+            index = 1 - Character.getNumericValue(binaryId.charAt(2));
+            desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][2]);
+            serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
+            broadcastMessage(serverLeaveDek);
+
+        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            System.out.println("Error in encrypting the dek during leaving distribution dek process");
+            //e.printStackTrace();
+        }
+
+        ServerLeaveKek serverLeaveKeys = new ServerLeaveKek();
+
+        SecretKey[][] oldKekTable = tableManager.getOldKekTable();
+
+        byte[] temp;
+
+        try {
+
+            //ENCRYPT NEW KEK1 WITH OLD KEK1 AND NEW DEK
+            int index = 1 - Character.getNumericValue(binaryId.charAt(0));
+            desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][0]);
+            temp = desCipher.doFinal(kekTable[index][0].getEncoded());
+            desCipher.init(Cipher.ENCRYPT_MODE, dek);
+            serverLeaveKeys.setKek1(desCipher.doFinal(temp));
+
+            //ENCRYPT NEW KEK2 WITH OLD KEK2 AND NEW DEK
+            index = 1 - Character.getNumericValue(binaryId.charAt(1));
+            desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][1]);
+            temp = desCipher.doFinal(kekTable[index][1].getEncoded());
+            desCipher.init(Cipher.ENCRYPT_MODE, dek);
+            serverLeaveKeys.setKek2(desCipher.doFinal(temp));
+
+            //ENCRYPT NEW KEK3 WITH OLD KEK3 AND NEW DEK
+            index = 1 - Character.getNumericValue(binaryId.charAt(2));
+            desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][2]);
+            temp = desCipher.doFinal(kekTable[index][2].getEncoded());
+            desCipher.init(Cipher.ENCRYPT_MODE, dek);
+            serverLeaveKeys.setKek3(desCipher.doFinal(temp));
+
+        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            System.out.println("Error in encrypting the keks during leaving distribution keks process");
+            //e.printStackTrace();
+        }
+
+        System.out.println("Sending new keks");
+        broadcastMessage(serverLeaveKeys);
+    }
+
+    private void broadcastMessage(Message message) {
+        MulticastSocket socket;
+
+        try {
+            socket = new MulticastSocket();
+
+            ByteArrayOutputStream b_out = new ByteArrayOutputStream();
+            ObjectOutputStream o_out = new ObjectOutputStream(b_out);
+
+            o_out.writeObject(message);
+
+            byte[] outBuf = b_out.toByteArray();
+
+            DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length, InetAddress.getByName(MCAST_ADDR), DEST_PORT);
+            socket.setTimeToLive(1);
+            socket.send(dgram);
+            socket.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+
     class GroupMasterManageMessages implements Runnable {
         private Socket memberSocket;
         private InetSocketAddress socketAddress;
@@ -130,284 +410,7 @@ public class GroupMaster implements Runnable {
         }
 
 
-        private void handleJoin(JoinMessage message, InetAddress address) {
-            int availableId = -1;
-            if (namingMap.containsValue(address)) {
-                return;
-            }
 
-            while (namingMap.size() >= MAX_MEMBERS_ALLOWED) {
-                try {
-                    System.out.println("In wait...");
-
-                    synchronized (lockJoin) {
-                        lockJoin.wait();
-                    }
-
-                    System.out.println("Wait finished");
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            if (namingMap.size() < MAX_MEMBERS_ALLOWED) {
-                System.out.println("Receiving join message .. ");
-                //FIND AVAILABLE ID FOR THE MEMBER REQUESTING ACCESS
-
-                for (int i = 0; i < MAX_MEMBERS_ALLOWED; i++) {
-                    if (!namingSlotStatus[i]) {
-                        availableId = i;
-                        break;
-                    }
-                }
-
-                if (availableId != -1) {
-                    namingSlotStatus[availableId] = true;
-                    namingMap.put(availableId, address);
-
-                    tableManager.recomputeDek();
-                    tableManager.recomputeKeks(availableId);
-
-                    sendKeysJoin(message.getPublicKey(), availableId);
-                    System.out.println(address.getHostAddress() + " now is in the group!");
-                }
-            }
-        }
-
-        private void handleLeave(InetAddress address) {
-            //CHECK IF THE CLIENT EXISTS
-            Boolean memberPresent = false;
-            for (int i = 0; i <= namingMap.size(); i++) {
-                if (namingSlotStatus[i]) {
-                    InetAddress senderAddress = namingMap.get(i);
-                    if (senderAddress.equals(address)) {
-                        memberPresent = true;
-                    }
-                }
-            }
-            if (!memberPresent) {
-                System.out.println("Received a leave message from a non group member");
-                return;
-            }
-
-            int leaveMember = -1;
-
-            for (int i = 0; i <= namingMap.size(); i++) {
-                if (namingSlotStatus[i]) {
-                    if (namingMap.get(i).equals(address)) {
-                        leaveMember = i;
-                    }
-                }
-            }
-            if (leaveMember != -1) {
-                namingMap.remove(leaveMember);
-                namingSlotStatus[leaveMember] = false;
-                tableManager.recomputeDek();
-                tableManager.recomputeKeks(leaveMember);
-                sendKeysLeave(leaveMember);
-
-                System.out.println("Notifying all");
-                synchronized (lockJoin) {
-                    lockJoin.notifyAll();
-                }
-                System.out.println("Notify done");
-            }
-
-
-        }
-
-        //------------------------------------------------------------------
-        //SEND THE NEW DEK AND KEKs TO THE NEW ENTRY ENCRYPTED WITH PK
-        //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE OLD DEK (?)(?)
-        //------------------------------------------------------------------
-        private void sendKeysJoin(PublicKey publicKey, int newEntryId) {
-            byte[] encryptedKeys;
-            SecretKey[][] kekTable = tableManager.getKekTable();
-
-            ServerJoinKeys serverJoinKeys = new ServerJoinKeys();
-
-            String binaryId = Converter.binaryConversion(newEntryId);
-
-            //ENCRYPT DEK AND KEKs TO BE SENT TO THE NEW ENTRY WITH HIS PK
-            try {
-                rsaCipher.init(Cipher.ENCRYPT_MODE, publicKey);
-            } catch (InvalidKeyException e) {
-                System.out.println("Can't initialize public key cipher");
-                e.printStackTrace();
-            }
-
-            try {
-                encryptedKeys = rsaCipher.doFinal(tableManager.getDek().getEncoded());
-                serverJoinKeys.setDek(encryptedKeys);
-
-                int index = Character.getNumericValue(binaryId.charAt(0));
-                encryptedKeys = rsaCipher.doFinal(kekTable[index][0].getEncoded());
-                serverJoinKeys.setKek1(encryptedKeys);
-
-                index = Character.getNumericValue(binaryId.charAt(1));
-                encryptedKeys = rsaCipher.doFinal(kekTable[index][1].getEncoded());
-                serverJoinKeys.setKek2(encryptedKeys);
-
-                index = Character.getNumericValue(binaryId.charAt(2));
-                encryptedKeys = rsaCipher.doFinal(kekTable[index][2].getEncoded());
-                serverJoinKeys.setKek3(encryptedKeys);
-
-            } catch (IllegalBlockSizeException | BadPaddingException e) {
-                System.out.println("Error in building the keys package");
-                e.printStackTrace();
-            }
-
-            //SEND THE MESSAGE TO THE NEW ENTRY
-            try {
-                DatagramSocket socket = new DatagramSocket();
-                ByteArrayOutputStream b_out = new ByteArrayOutputStream();
-                ObjectOutputStream o_out = new ObjectOutputStream(b_out);
-
-                o_out.writeObject(serverJoinKeys);
-
-                byte[] b = b_out.toByteArray();
-
-                DatagramPacket dgram = new DatagramPacket(b, b.length, namingMap.get(newEntryId), DEST_PORT);
-                socket.send(dgram);
-                socket.close();
-
-            } catch (IOException e) {
-                System.out.println("Error in new dek message send to the new entry");
-                e.printStackTrace();
-            }
-
-            serverJoinKeys = new ServerJoinKeys();
-
-            SecretKey[][] oldKekTable = tableManager.getOldKekTable();
-
-            try {
-                //ENCRYPT NEW DEK WITH OLD DEK
-                desCipher.init(Cipher.ENCRYPT_MODE, tableManager.getOldDek());
-                serverJoinKeys.setDek(desCipher.doFinal(tableManager.getDek().getEncoded()));
-
-                //ENCRYPT NEW KEK1 WITH OLD KEK1
-                int index = Character.getNumericValue(binaryId.charAt(0));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][0]);
-                serverJoinKeys.setKek1(desCipher.doFinal(kekTable[index][0].getEncoded()));
-
-                //ENCRYPT NEW KEK2 WITH OLD KEK2
-                index = Character.getNumericValue(binaryId.charAt(1));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][1]);
-                serverJoinKeys.setKek2(desCipher.doFinal(kekTable[index][1].getEncoded()));
-
-                //ENCRYPT NEW KEK3 WITH OLD KEK3
-                index = Character.getNumericValue(binaryId.charAt(2));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][2]);
-                serverJoinKeys.setKek3(desCipher.doFinal(kekTable[index][2].getEncoded()));
-
-            } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-                System.out.println("Error in building the keys package");
-                e.printStackTrace();
-            }
-
-            //broadcastJoin(serverJoinKeys, newEntryId);
-            broadcastMessage(serverJoinKeys);
-
-        }
-
-        //------------------------------------------------------------------
-        //SEND THE NEW DEK AND KEKs TO THE OTHER MEMBERS
-        //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE KEK THAT THE LEAVE MEMBER NOT KNOW
-        //------------------------------------------------------------------
-        private void sendKeysLeave(int leaveId) {
-            SecretKey[][] kekTable = tableManager.getKekTable();
-
-            SecretKey dek = tableManager.getDek();
-
-            String binaryId = Converter.binaryConversion(leaveId);
-
-            ServerLeaveDek serverLeaveDek = new ServerLeaveDek();
-
-
-            try {
-                //ENCRYPT NEW DEK WITH KEK1
-                int index = 1 - Character.getNumericValue(binaryId.charAt(0));
-                desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][0]);
-                serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastMessage(serverLeaveDek);
-
-                //ENCRYPT NEW DEK WITH KEK1
-                index = 1 - Character.getNumericValue(binaryId.charAt(1));
-                desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][1]);
-                serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastMessage(serverLeaveDek);
-
-                //ENCRYPT NEW DEK WITH KEK1
-                index = 1 - Character.getNumericValue(binaryId.charAt(2));
-                desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][2]);
-                serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastMessage(serverLeaveDek);
-
-            } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-                System.out.println("Error in encrypting the dek during leaving distribution dek process");
-                //e.printStackTrace();
-            }
-
-            ServerLeaveKek serverLeaveKeys = new ServerLeaveKek();
-
-            SecretKey[][] oldKekTable = tableManager.getOldKekTable();
-
-            byte[] temp;
-
-            try {
-
-                //ENCRYPT NEW KEK1 WITH OLD KEK1 AND NEW DEK
-                int index = 1 - Character.getNumericValue(binaryId.charAt(0));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][0]);
-                temp = desCipher.doFinal(kekTable[index][0].getEncoded());
-                desCipher.init(Cipher.ENCRYPT_MODE, dek);
-                serverLeaveKeys.setKek1(desCipher.doFinal(temp));
-
-                //ENCRYPT NEW KEK2 WITH OLD KEK2 AND NEW DEK
-                index = 1 - Character.getNumericValue(binaryId.charAt(1));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][1]);
-                temp = desCipher.doFinal(kekTable[index][1].getEncoded());
-                desCipher.init(Cipher.ENCRYPT_MODE, dek);
-                serverLeaveKeys.setKek2(desCipher.doFinal(temp));
-
-                //ENCRYPT NEW KEK3 WITH OLD KEK3 AND NEW DEK
-                index = 1 - Character.getNumericValue(binaryId.charAt(2));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][2]);
-                temp = desCipher.doFinal(kekTable[index][2].getEncoded());
-                desCipher.init(Cipher.ENCRYPT_MODE, dek);
-                serverLeaveKeys.setKek3(desCipher.doFinal(temp));
-
-            } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-                System.out.println("Error in encrypting the keks during leaving distribution keks process");
-                //e.printStackTrace();
-            }
-
-            System.out.println("Sending new keks");
-            broadcastMessage(serverLeaveKeys);
-        }
-
-        private void broadcastMessage(Message message) {
-            MulticastSocket socket;
-
-            try {
-                socket = new MulticastSocket();
-
-                ByteArrayOutputStream b_out = new ByteArrayOutputStream();
-                ObjectOutputStream o_out = new ObjectOutputStream(b_out);
-
-                o_out.writeObject(message);
-
-                byte[] outBuf = b_out.toByteArray();
-
-                DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length, InetAddress.getByName(MCAST_ADDR), DEST_PORT);
-                socket.setTimeToLive(1);
-                socket.send(dgram);
-                socket.close();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     class GroupMasterChecker implements Runnable {
@@ -455,12 +458,10 @@ public class GroupMaster implements Runnable {
                             System.out.println("Waiting alive...");
                             client = monitoringSocket.accept();
                             members.remove(((InetSocketAddress) client.getRemoteSocketAddress()).getAddress());
-                        } catch (SocketException e) {
+                        }  catch (IOException e) {
                             System.out.println("Timer Expired");
                             socket.close();
                             break;
-                        } catch (IOException e) {
-                            e.printStackTrace();
                         }
                     }
 
@@ -478,143 +479,6 @@ public class GroupMaster implements Runnable {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-            }
-        }
-
-        private void handleLeave(InetAddress address) {
-            //CHECK IF THE CLIENT EXISTS
-            Boolean memberPresent = false;
-            for (int i = 0; i <= namingMap.size(); i++) {
-                if (namingSlotStatus[i]) {
-                    InetAddress senderAddress = namingMap.get(i);
-                    if (senderAddress.equals(address)) {
-                        memberPresent = true;
-                    }
-                }
-            }
-            if (!memberPresent) {
-                System.out.println("Received a leave message from a non group member");
-                return;
-            }
-
-            int leaveMember = -1;
-
-            for (int i = 0; i <= namingMap.size(); i++) {
-                if (namingSlotStatus[i]) {
-                    if (namingMap.get(i).equals(address)) {
-                        leaveMember = i;
-                    }
-                }
-            }
-            if (leaveMember != -1) {
-                namingMap.remove(leaveMember);
-                namingSlotStatus[leaveMember] = false;
-                tableManager.recomputeDek();
-                tableManager.recomputeKeks(leaveMember);
-                sendKeysLeave(leaveMember);
-
-                System.out.println("Notifying all");
-                synchronized (lockJoin) {
-                    lockJoin.notifyAll();
-                }
-                System.out.println("Notify done");
-            }
-
-
-        }
-
-        private void sendKeysLeave(int leaveId) {
-            SecretKey[][] kekTable = tableManager.getKekTable();
-
-            SecretKey dek = tableManager.getDek();
-
-            String binaryId = Converter.binaryConversion(leaveId);
-
-            ServerLeaveDek serverLeaveDek = new ServerLeaveDek();
-
-
-            try {
-                //ENCRYPT NEW DEK WITH KEK1
-                int index = 1 - Character.getNumericValue(binaryId.charAt(0));
-                desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][0]);
-                serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastMessage(serverLeaveDek);
-
-                //ENCRYPT NEW DEK WITH KEK1
-                index = 1 - Character.getNumericValue(binaryId.charAt(1));
-                desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][1]);
-                serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastMessage(serverLeaveDek);
-
-                //ENCRYPT NEW DEK WITH KEK1
-                index = 1 - Character.getNumericValue(binaryId.charAt(2));
-                desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][2]);
-                serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
-                broadcastMessage(serverLeaveDek);
-
-            } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-                System.out.println("Error in encrypting the dek during leaving distribution dek process");
-                //e.printStackTrace();
-            }
-
-            ServerLeaveKek serverLeaveKeys = new ServerLeaveKek();
-
-            SecretKey[][] oldKekTable = tableManager.getOldKekTable();
-
-            byte[] temp;
-
-            try {
-
-                //ENCRYPT NEW KEK1 WITH OLD KEK1 AND NEW DEK
-                int index = 1 - Character.getNumericValue(binaryId.charAt(0));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][0]);
-                temp = desCipher.doFinal(kekTable[index][0].getEncoded());
-                desCipher.init(Cipher.ENCRYPT_MODE, dek);
-                serverLeaveKeys.setKek1(desCipher.doFinal(temp));
-
-                //ENCRYPT NEW KEK2 WITH OLD KEK2 AND NEW DEK
-                index = 1 - Character.getNumericValue(binaryId.charAt(1));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][1]);
-                temp = desCipher.doFinal(kekTable[index][1].getEncoded());
-                desCipher.init(Cipher.ENCRYPT_MODE, dek);
-                serverLeaveKeys.setKek2(desCipher.doFinal(temp));
-
-                //ENCRYPT NEW KEK3 WITH OLD KEK3 AND NEW DEK
-                index = 1 - Character.getNumericValue(binaryId.charAt(2));
-                desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][2]);
-                temp = desCipher.doFinal(kekTable[index][2].getEncoded());
-                desCipher.init(Cipher.ENCRYPT_MODE, dek);
-                serverLeaveKeys.setKek3(desCipher.doFinal(temp));
-
-            } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-                System.out.println("Error in encrypting the keks during leaving distribution keks process");
-                //e.printStackTrace();
-            }
-
-            System.out.println("Sending new keks");
-            broadcastMessage(serverLeaveKeys);
-        }
-
-        private void broadcastMessage(Message message) {
-            MulticastSocket socket;
-
-            try {
-                socket = new MulticastSocket();
-
-                ByteArrayOutputStream b_out = new ByteArrayOutputStream();
-                ObjectOutputStream o_out = new ObjectOutputStream(b_out);
-
-                o_out.writeObject(message);
-
-                byte[] outBuf = b_out.toByteArray();
-
-                DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length, InetAddress.getByName(MCAST_ADDR), DEST_PORT);
-                socket.setTimeToLive(1);
-                socket.send(dgram);
-                socket.close();
-
-            } catch (IOException e) {
-                e.printStackTrace();
             }
         }
     }
