@@ -278,13 +278,13 @@ public class GroupMaster implements Runnable {
             serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
             broadcastMessage(serverLeaveDek);
 
-            //ENCRYPT NEW DEK WITH KEK1
+            //ENCRYPT NEW DEK WITH KEK2
             index = 1 - Character.getNumericValue(binaryId.charAt(1));
             desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][1]);
             serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
             broadcastMessage(serverLeaveDek);
 
-            //ENCRYPT NEW DEK WITH KEK1
+            //ENCRYPT NEW DEK WITH KEK3
             index = 1 - Character.getNumericValue(binaryId.charAt(2));
             desCipher.init(Cipher.ENCRYPT_MODE, kekTable[index][2]);
             serverLeaveDek.setDek(desCipher.doFinal(dek.getEncoded()));
@@ -304,21 +304,21 @@ public class GroupMaster implements Runnable {
         try {
 
             //ENCRYPT NEW KEK1 WITH OLD KEK1 AND NEW DEK
-            int index = 1 - Character.getNumericValue(binaryId.charAt(0));
+            int index = Character.getNumericValue(binaryId.charAt(0));
             desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][0]);
             temp = desCipher.doFinal(kekTable[index][0].getEncoded());
             desCipher.init(Cipher.ENCRYPT_MODE, dek);
             serverLeaveKeys.setKek1(desCipher.doFinal(temp));
 
             //ENCRYPT NEW KEK2 WITH OLD KEK2 AND NEW DEK
-            index = 1 - Character.getNumericValue(binaryId.charAt(1));
+            index = Character.getNumericValue(binaryId.charAt(1));
             desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][1]);
             temp = desCipher.doFinal(kekTable[index][1].getEncoded());
             desCipher.init(Cipher.ENCRYPT_MODE, dek);
             serverLeaveKeys.setKek2(desCipher.doFinal(temp));
 
             //ENCRYPT NEW KEK3 WITH OLD KEK3 AND NEW DEK
-            index = 1 - Character.getNumericValue(binaryId.charAt(2));
+            index = Character.getNumericValue(binaryId.charAt(2));
             desCipher.init(Cipher.ENCRYPT_MODE, oldKekTable[index][2]);
             temp = desCipher.doFinal(kekTable[index][2].getEncoded());
             desCipher.init(Cipher.ENCRYPT_MODE, dek);
@@ -328,7 +328,11 @@ public class GroupMaster implements Runnable {
             System.out.println("Error in encrypting the keks during leaving distribution keks process");
             //e.printStackTrace();
         }
-
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         System.out.println("Sending new keks");
         broadcastMessage(serverLeaveKeys);
     }
