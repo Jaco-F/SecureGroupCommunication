@@ -7,7 +7,7 @@ import java.net.*;
 import java.security.*;
 
 /**
- * Created by Jacopo on 11/03/2015.
+ * Created by Jacopo? on 11/03/2015.
  */
 public class GroupMember implements Runnable{
     private PrivateKey privateKey;
@@ -17,7 +17,6 @@ public class GroupMember implements Runnable{
     private SecretKey[] keks;
 
     private MulticastSocket listeningSocket;
-
     private Socket serverSocket;
     private int port;
 
@@ -25,25 +24,18 @@ public class GroupMember implements Runnable{
     private Cipher rsaCipher;
 
     private final String serverAddress = "192.168.0.2";
-    private final int serverPort = 13000;
+    private final int SERVER_PORT = 13000;
 
+    private final int MONITORING_PORT = 15000;
     private  String hostName ="";
 
     private String groupAddress = "239.0.0.1";
 
+    private Thread monitoringThread;
+
     public GroupMember(int port) {
         this.port = port;
         keks = new SecretKey[3];
-
-        try {
-            //Prepare to join multicast group
-            listeningSocket = new MulticastSocket(port);
-            InetAddress address = InetAddress.getByName(groupAddress);
-            hostName = Inet4Address.getLocalHost().getHostName();
-            listeningSocket.joinGroup(address);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
         //-----------------------------------------
         //GENERATE PUBLIC AND PRIVATE KEY
@@ -206,15 +198,31 @@ public class GroupMember implements Runnable{
         Message message = new JoinMessage(publicKey);
         ObjectOutputStream objectOutputStream = null;
         ObjectInputStream objectInputStream = null;
-
         ServerJoinKeys initMessage = null;
+
+        monitoringThread = new Thread(new GroupMemberChecker());
+
+
+        try {
+            //Prepare to join multicast group
+            listeningSocket = new MulticastSocket(port);
+
+            InetAddress address = InetAddress.getByName(groupAddress);
+
+            hostName = Inet4Address.getLocalHost().getHostName();
+            listeningSocket.joinGroup(address);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
 
         //------------------------------------------------------
         //CONNECT TO THE SERVER AND SEND HIM THE JOIN MESSAGE
         //------------------------------------------------------
 
         try {
-            serverSocket = new Socket(serverAddress,serverPort);
+            serverSocket = new Socket(serverAddress, SERVER_PORT);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -291,8 +299,9 @@ public class GroupMember implements Runnable{
             e.printStackTrace();
         }
 
-    }
+        monitoringThread.start();
 
+    }
 
     private void broadcastMessage(String msg) {
         ObjectOutputStream objectOutputStream = null;
@@ -337,7 +346,7 @@ public class GroupMember implements Runnable{
         //CONNECT TO THE SERVER AND SEND HIM THE LEAVE MESSAGE
         //------------------------------------------------------
         try {
-            serverSocket = new Socket(serverAddress,serverPort);
+            serverSocket = new Socket(serverAddress, SERVER_PORT);
             objectOutputStream = new ObjectOutputStream(serverSocket.getOutputStream());
         } catch (IOException e) {
             System.out.println("Cannot create objectOutputStream");
@@ -353,6 +362,8 @@ public class GroupMember implements Runnable{
             System.out.println("Cannot write object to group master");
             e.printStackTrace();
         }
+
+        monitoringThread.interrupt();
     }
 
 
@@ -382,6 +393,61 @@ public class GroupMember implements Runnable{
                 }
                 else{
                     groupMember.broadcastMessage(line);
+                }
+            }
+        }
+    }
+
+    class GroupMemberChecker implements Runnable{
+        MulticastSocket monitoringSocket;
+        public GroupMemberChecker(){
+
+            try {
+                monitoringSocket = new MulticastSocket(MONITORING_PORT);
+                InetAddress address = InetAddress.getByName(groupAddress);
+                monitoringSocket.joinGroup(address);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public void run() {
+            while(!Thread.interrupted()){
+                try {
+                    byte[] b = new byte[65535];
+                    ByteArrayInputStream bis = new ByteArrayInputStream(b);
+                    DatagramPacket dgram = new DatagramPacket(b, b.length);
+                    monitoringSocket.receive(dgram);
+                    ObjectOutputStream objectOutputStream = null;
+                    ObjectInputStream objectInputStream = new ObjectInputStream(bis);
+                    Message inputMsg = (Message) objectInputStream.readObject();
+                    Socket socket = null;
+                    if(inputMsg instanceof AliveMessage){
+                        try {
+                            socket = new Socket(serverAddress, MONITORING_PORT);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+                        } catch (IOException e) {
+                            System.out.println("Cannot create objectOutputStream");
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            objectOutputStream.writeObject(new AliveMessage());
+                            System.out.println("Message to stay in the group sent");
+                        } catch (IOException e) {
+                            System.out.println("Cannot write object to group master");
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                catch (IOException | ClassNotFoundException e){
+                    e.printStackTrace();
                 }
             }
         }
