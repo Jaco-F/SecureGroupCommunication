@@ -149,9 +149,9 @@ public class GroupMember implements Runnable{
                         try {
                             byte[] decMsg = desCipher.doFinal(txMessage.getText());
                             String msg = new String(decMsg);
-                            System.out.println(txMessage.getHostName() + " : " + msg);
-                        } catch (BadPaddingException e) {
-                            System.out.println("Received a message I couldn't decrypt");
+                            System.out.println("#SecureChannel : " + txMessage.getHostName() + " : " + msg);
+                        } catch (BadPaddingException | IllegalBlockSizeException e) {
+                            System.out.println(txMessage.getHostName() + ":" + new String(txMessage.getText()));
                         }
 
                     } else if (inputMsg instanceof ServerLeaveDek) {
