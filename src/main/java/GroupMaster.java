@@ -16,9 +16,10 @@ import java.util.List;
  */
 
 public class GroupMaster implements Runnable {
-    private final static int MAX_MEMBERS_ALLOWED = 8;
-    private final static String MCAST_ADDR = "239.0.0.1";
-    private final static int DEST_PORT = 12345;
+    private final int MAX_MEMBERS_ALLOWED = 8;
+    private final String MCAST_ADDR = "239.0.0.1";
+    private final int DEST_PORT = 12345;
+    private final int JOIN_PORT = 14000;
 
     private HashMap<Integer, InetAddress> namingMap;
     private boolean[] namingSlotStatus;
@@ -137,7 +138,7 @@ public class GroupMaster implements Runnable {
     private void handleLeave(InetAddress address) {
         //CHECK IF THE CLIENT EXISTS
         Boolean memberPresent = false;
-        for (int i = 0; i <= namingMap.size(); i++) {
+        for (int i = 0; i < namingMap.size(); i++) {
             if (namingSlotStatus[i]) {
                 InetAddress senderAddress = namingMap.get(i);
                 if (senderAddress.equals(address)) {
@@ -152,7 +153,7 @@ public class GroupMaster implements Runnable {
 
         int leaveMember = -1;
 
-        for (int i = 0; i <= namingMap.size(); i++) {
+        for (int i = 0; i < namingMap.size(); i++) {
             if (namingSlotStatus[i]) {
                 if (namingMap.get(i).equals(address)) {
                     leaveMember = i;
@@ -218,21 +219,26 @@ public class GroupMaster implements Runnable {
         }
 
         //SEND THE MESSAGE TO THE NEW ENTRY
+        Socket socket = null;
+        ObjectOutputStream objectOutputStream = null;
         try {
-            DatagramSocket socket = new DatagramSocket();
-            ByteArrayOutputStream b_out = new ByteArrayOutputStream();
-            ObjectOutputStream o_out = new ObjectOutputStream(b_out);
-
-            o_out.writeObject(serverJoinKeys);
-
-            byte[] b = b_out.toByteArray();
-
-            DatagramPacket dgram = new DatagramPacket(b, b.length, namingMap.get(newEntryId), DEST_PORT);
-            socket.send(dgram);
-            socket.close();
-
+            socket = new Socket(namingMap.get(newEntryId), JOIN_PORT);
         } catch (IOException e) {
-            System.out.println("Error in new dek message send to the new entry");
+            e.printStackTrace();
+        }
+
+        try {
+            objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+        } catch (IOException e) {
+            System.out.println("Cannot create objectOutputStream");
+            e.printStackTrace();
+        }
+
+        try {
+            objectOutputStream.writeObject(serverJoinKeys);
+            System.out.println("Message to join the group sent");
+        } catch (IOException e) {
+            System.out.println("Cannot write object to group master");
             e.printStackTrace();
         }
 
@@ -441,7 +447,7 @@ public class GroupMaster implements Runnable {
 
                     byte[] outBuf = b_out.toByteArray();
 
-                    DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length, InetAddress.getByName(GroupMaster.MCAST_ADDR), MONITORING_PORT);
+                    DatagramPacket dgram = new DatagramPacket(outBuf, outBuf.length, InetAddress.getByName(MCAST_ADDR), MONITORING_PORT);
                     socket.setTimeToLive(1);
                     socket.send(dgram);
                     socket.close();
@@ -472,7 +478,7 @@ public class GroupMaster implements Runnable {
                 }
 
                 try {
-                    Thread.sleep(2000);
+                    Thread.sleep(5000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }

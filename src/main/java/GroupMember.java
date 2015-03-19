@@ -309,6 +309,7 @@ public class GroupMember implements Runnable{
             objectInputStream.close();
             objectOutputStream.close();
             serverSocket.close();
+            clientSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -462,7 +463,7 @@ public class GroupMember implements Runnable{
 
                         try {
                             objectOutputStream.writeObject(new AliveMessage());
-                            System.out.println("Message to stay in the group sent");
+                            //System.out.println("Message to stay in the group sent");
                         } catch (IOException e) {
                             System.out.println("Cannot write object to group master");
                             e.printStackTrace();
