@@ -203,6 +203,7 @@ public class GroupMember implements Runnable{
                     }
                 }
                 else {
+                    //print on the console the message
                     if (inputMsg instanceof TextMessage){
                         TextMessage txMessage = (TextMessage) inputMsg;
                         String msg = new String(txMessage.getText());
