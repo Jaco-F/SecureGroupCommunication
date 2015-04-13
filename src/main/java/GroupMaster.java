@@ -345,6 +345,7 @@ public class GroupMaster implements Runnable {
         broadcastMessage(serverLeaveKeys);
     }
 
+    //SEND MULTICAST MESSAGE TO ALL THE MULTICAST MEMBERS
     private void broadcastMessage(Message message) {
         MulticastSocket socket;
 
@@ -368,6 +369,7 @@ public class GroupMaster implements Runnable {
         }
     }
 
+    //A SINGLE MESSAGE HANDLER
     class GroupMasterManageMessages implements Runnable {
         private Socket memberSocket;
         private InetSocketAddress socketAddress;
