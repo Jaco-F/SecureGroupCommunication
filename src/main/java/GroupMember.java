@@ -174,27 +174,27 @@ public class GroupMember implements Runnable{
                         byte[] firstPhaseDecriptedKek;
                         byte[] decKek;
                         try {
-                            desCipher.init(Cipher.DECRYPT_MODE, dek);
-                            firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek1());
                             desCipher.init(Cipher.DECRYPT_MODE, keks[0]);
+                            firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek1());
+                            desCipher.init(Cipher.DECRYPT_MODE, dek);
                             decKek = desCipher.doFinal(firstPhaseDecriptedKek);
                             keks[0] = new SecretKeySpec(decKek, 0, decKek.length, "DES");
                         } catch (BadPaddingException e) {
                             System.out.println("I don't need kek 1");
                         }
                         try {
-                            desCipher.init(Cipher.DECRYPT_MODE, dek);
-                            firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek2());
                             desCipher.init(Cipher.DECRYPT_MODE, keks[1]);
+                            firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek2());
+                            desCipher.init(Cipher.DECRYPT_MODE, dek);
                             decKek = desCipher.doFinal(firstPhaseDecriptedKek);
                             keks[1] = new SecretKeySpec(decKek, 0, decKek.length, "DES");
                         } catch (BadPaddingException e) {
                             System.out.println("I don't need kek 2");
                         }
                         try {
-                            desCipher.init(Cipher.DECRYPT_MODE, dek);
-                            firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek3());
                             desCipher.init(Cipher.DECRYPT_MODE, keks[2]);
+                            firstPhaseDecriptedKek = desCipher.doFinal(serverLeaveKek.getKek3());
+                            desCipher.init(Cipher.DECRYPT_MODE, dek);
                             decKek = desCipher.doFinal(firstPhaseDecriptedKek);
                             keks[2] = new SecretKeySpec(decKek, 0, decKek.length, "DES");
                         } catch (BadPaddingException e) {
