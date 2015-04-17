@@ -147,11 +147,15 @@ public class GroupMember implements Runnable{
                         TextMessage txMessage = (TextMessage) inputMsg;
                         desCipher.init(Cipher.DECRYPT_MODE, dek);
                         try {
-                            byte[] decMsg = desCipher.doFinal(txMessage.getText());
-                            String msg = new String(decMsg);
-                            System.out.println("#SecureChannel : " + txMessage.getHostName() + " : " + msg);
+                            if (txMessage.getText() != null){
+                                byte[] decMsg = desCipher.doFinal(txMessage.getText());
+                                String msg = new String(decMsg);
+                                System.out.println("#SecureChannel : " + txMessage.getHostName() + " : " + msg);
+                            }
                         } catch (BadPaddingException | IllegalBlockSizeException e) {
-                            System.out.println(txMessage.getHostName() + ":" + new String(txMessage.getText()));
+                            if (txMessage.getText() != null) {
+                                System.out.println(txMessage.getHostName() + ":" + new String(txMessage.getText()));
+                            }
                         }
 
                     } else if (inputMsg instanceof ServerLeaveDek) {
@@ -206,8 +210,10 @@ public class GroupMember implements Runnable{
                     //print on the console the message
                     if (inputMsg instanceof TextMessage){
                         TextMessage txMessage = (TextMessage) inputMsg;
-                        String msg = new String(txMessage.getText());
-                        System.out.println(txMessage.getHostName() + " : " + msg);
+                        if (txMessage.getText() != null){
+                            String msg = new String(txMessage.getText());
+                            System.out.println(txMessage.getHostName() + " : " + msg);
+                        }
                     }
                 }
             } catch (IOException | ClassNotFoundException | IllegalBlockSizeException | InvalidKeyException e) {
