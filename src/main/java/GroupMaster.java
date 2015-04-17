@@ -39,12 +39,14 @@ public class GroupMaster implements Runnable {
         namingMap = new HashMap<Integer, InetAddress>();
 
         try {
+            //init DES cipher
             desCipher = Cipher.getInstance("DES");
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
             e.printStackTrace();
         }
 
         try {
+            //init RSA cipher
             rsaCipher = Cipher.getInstance("RSA");
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
             e.printStackTrace();
@@ -66,6 +68,7 @@ public class GroupMaster implements Runnable {
         }
         System.out.println("Server started on port : " + serverPort);
 
+        //init monitoring tool
         GroupMasterChecker groupMasterChecker = new GroupMasterChecker();
         Thread checkerThread = new Thread(groupMasterChecker);
         checkerThread.start();
@@ -81,17 +84,20 @@ public class GroupMaster implements Runnable {
                 e.printStackTrace();
             }
 
+            //allocate new message manager
             GroupMasterManageMessages groupMasterManageMessages = new GroupMasterManageMessages(client);
             Thread thread = new Thread(groupMasterManageMessages);
             thread.start();
         }
     }
 
+    //
     private synchronized void handleJoin(JoinMessage message, InetAddress address) {
         int availableId = -1;
         if (namingMap.containsValue(address)) {
             return;
         }
+
 
         while (namingMap.size() >= MAX_MEMBERS_ALLOWED) {
             try {
@@ -105,8 +111,8 @@ public class GroupMaster implements Runnable {
 
         if (namingMap.size() < MAX_MEMBERS_ALLOWED) {
             System.out.println("Receiving join message .. ");
-            //FIND AVAILABLE ID FOR THE MEMBER REQUESTING ACCESS
 
+            //FIND AVAILABLE ID FOR THE MEMBER REQUESTING ACCESS
             for (int i = 0; i < MAX_MEMBERS_ALLOWED; i++) {
                 if (!namingSlotStatus[i]) {
                     availableId = i;
@@ -128,8 +134,8 @@ public class GroupMaster implements Runnable {
     }
 
     private synchronized void handleLeave(InetAddress address) {
-        //CHECK IF THE CLIENT EXISTS
 
+        //CHECK IF THE CLIENT EXISTS
         int leaveMember = -1;
         for (int i = 0; i < MAX_MEMBERS_ALLOWED; i++) {
             if (namingSlotStatus[i]) {
@@ -140,12 +146,15 @@ public class GroupMaster implements Runnable {
             }
         }
         if (leaveMember == -1) {
+            //Ignore the request
             System.out.println("Received a leave message from a non group member");
             return;
         }
 
         namingMap.remove(leaveMember);
         namingSlotStatus[leaveMember] = false;
+
+        //recompute DEK and KEKs based on the id of the member
         tableManager.recomputeDek();
         tableManager.recomputeKeks(leaveMember);
         sendKeysLeave(leaveMember);
@@ -154,13 +163,12 @@ public class GroupMaster implements Runnable {
         this.notify();
         System.out.println("Notify done");
 
-
-
     }
 
     //------------------------------------------------------------------
     //SEND THE NEW DEK AND KEKs TO THE NEW ENTRY ENCRYPTED WITH PK
-    //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE OLD DEK (?)(?)
+    //SEND THE NEW DEK TO THE OLD MEMBERS ENCRYPTED WITH THE OLD DEK
+    //SEND THE NEW KEKs TO THE OLD MEMBERS ENCRYPTED WITH THE OLD KEKs
     //------------------------------------------------------------------
     private void sendKeysJoin(PublicKey publicKey, int newEntryId) {
         byte[] encryptedKeys;
@@ -337,6 +345,7 @@ public class GroupMaster implements Runnable {
         broadcastMessage(serverLeaveKeys);
     }
 
+    //SEND MULTICAST MESSAGE TO ALL THE MULTICAST MEMBERS
     private void broadcastMessage(Message message) {
         MulticastSocket socket;
 
@@ -360,6 +369,7 @@ public class GroupMaster implements Runnable {
         }
     }
 
+    //A SINGLE MESSAGE HANDLER
     class GroupMasterManageMessages implements Runnable {
         private Socket memberSocket;
         private InetSocketAddress socketAddress;
@@ -367,7 +377,6 @@ public class GroupMaster implements Runnable {
         public GroupMasterManageMessages(Socket clientSocket) {
             memberSocket = clientSocket;
             socketAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
-
         }
 
         @Override
@@ -402,6 +411,7 @@ public class GroupMaster implements Runnable {
 
     }
 
+    //Monitoring module
     class GroupMasterChecker implements Runnable {
         private final int MONITORING_PORT = 15000;
         ServerSocket monitoringSocket;
@@ -440,6 +450,7 @@ public class GroupMaster implements Runnable {
 
                     monitoringSocket.setSoTimeout(2000);
 
+                    //accept all the message received in the timeout.
                     while (true) {
                         Socket client = null;
                         //WAIT MESSAGE
@@ -452,6 +463,7 @@ public class GroupMaster implements Runnable {
                         }
                     }
 
+                    //manage with leave with all the other
                     for (InetAddress a : members) {
                         handleLeave(a);
                         System.out.println(a.toString() + " kicked out!");
@@ -472,6 +484,7 @@ public class GroupMaster implements Runnable {
         }
     }
 
+    //class that manage all the keys (KEKs and DEK)
     class TableManager {
         private SecretKey dek;
         private SecretKey oldDek;
@@ -482,12 +495,6 @@ public class GroupMaster implements Runnable {
         public TableManager() {
             kekTable = new SecretKey[2][3];
             oldKekTable = new SecretKey[2][3];
-            try {
-                keygen = KeyGenerator.getInstance("DES");
-            } catch (NoSuchAlgorithmException e) {
-                e.printStackTrace();
-            }
-
             try {
                 keygen = KeyGenerator.getInstance("DES");
             } catch (NoSuchAlgorithmException e) {
@@ -511,6 +518,7 @@ public class GroupMaster implements Runnable {
 
         }
 
+        //recompute all keks considering the memberId
         public void recomputeKeks(int memberId) {
             System.out.println("Recomputing keks...");
             String binaryId = Converter.binaryConversion(memberId);

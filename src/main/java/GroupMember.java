@@ -203,6 +203,7 @@ public class GroupMember implements Runnable{
                     }
                 }
                 else {
+                    //print on the console the message
                     if (inputMsg instanceof TextMessage){
                         TextMessage txMessage = (TextMessage) inputMsg;
                         String msg = new String(txMessage.getText());
@@ -402,7 +403,6 @@ public class GroupMember implements Runnable{
             System.out.println("Welcome! Type the message to broadcast to the multicast group. :join to join or :leave to leave)");
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
             while(true){
-                System.out.println("Type the message to broadcast (exit to leave)...");
                 try {
                     line = br.readLine();
                 } catch (IOException e) {
