@@ -211,7 +211,7 @@ public class GroupMember implements Runnable{
                     }
                 }
             } catch (IOException | ClassNotFoundException | IllegalBlockSizeException | InvalidKeyException e) {
-                e.printStackTrace();
+                //e.printStackTrace();
             }
         }
 
@@ -289,7 +289,7 @@ public class GroupMember implements Runnable{
             dek = new SecretKeySpec(decDek,0,decDek.length,"DES");
         } catch (IllegalBlockSizeException | BadPaddingException e) {
             System.out.println("Error in dek decryption");
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
         //DECRYPTS AND SAVE KEKs
@@ -302,7 +302,7 @@ public class GroupMember implements Runnable{
             keks[2] = new SecretKeySpec(decKek3,0,decKek3.length,"DES");
         } catch (IllegalBlockSizeException|BadPaddingException e){
             System.out.println("Error in kek decryption");
-            e.printStackTrace();
+            //e.printStackTrace();
         }
         System.out.println("Keks and Dek saved");
 
@@ -334,7 +334,7 @@ public class GroupMember implements Runnable{
                     byte[] msgEnc = desCipher.doFinal(msg.getBytes());
                     txMessage.setText(msgEnc);
                 } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
-                    e.printStackTrace();
+                    //e.printStackTrace();
                 }
             }
             ByteArrayOutputStream b_out = new ByteArrayOutputStream();
@@ -342,7 +342,7 @@ public class GroupMember implements Runnable{
                 objectOutputStream = new ObjectOutputStream(b_out);
             } catch (IOException e) {
                 System.out.println("Cannot create objectOutputStream");
-                e.printStackTrace();
+                //e.printStackTrace();
             }
 
             objectOutputStream.writeObject(txMessage);
@@ -370,7 +370,7 @@ public class GroupMember implements Runnable{
             objectOutputStream = new ObjectOutputStream(serverSocket.getOutputStream());
         } catch (IOException e) {
             System.out.println("Cannot create objectOutputStream");
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
         try {
@@ -380,7 +380,7 @@ public class GroupMember implements Runnable{
             System.out.println("You left the group");
         } catch (IOException e) {
             System.out.println("Cannot write object to group master");
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
         monitoringThread.interrupt();
